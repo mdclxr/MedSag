@@ -1,0 +1,41 @@
+{% extends "labeler_base.html" %}
+{% block title %}设置{% endblock %}
+{% block content %}
+
+    <h1>账户设置</h1>
+
+    <div class="mt-4">
+        <h2>API密钥</h2>
+        <p><strong>您的API密钥：</strong> {{ user.api_key }}</p>
+        <form method="POST" action="{{ url_for('auth.generate_api_key') }}" class="mb-3">
+            <button type="submit" class="btn btn-warning">生成新密钥</button>
+        </form>
+        <p class="text-muted">请保护好您的API密钥。任何拥有此密钥的人都可以访问您的数据。</p>
+    </div>
+
+    <div class="mt-4">
+        <h2>您的项目</h2>
+        {% if projects %}
+            <ul>
+                {% for project in projects %}
+                    <li>{{ project }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>您还没有创建任何项目。</p>
+        {% endif %}
+    </div>
+
+    <div class="mt-4">
+        <h2>API文档</h2>
+        <p>使用您的API密钥来验证请求：</p>
+        <pre>curl -H "Authorization: Bearer {{ user.api_key }}" https://api.visiofirm.com/v1/projects</pre>
+        <h3>可用端点</h3>
+        <ul>
+            <li><code>GET /projects</code> - 列出所有项目</li>
+            <li><code>POST /projects</code> - 创建新项目</li>
+            <li><code>GET /projects/{id}/export</code> - 导出项目标注</li>
+        </ul>
+    </div>
+
+{% endblock %}

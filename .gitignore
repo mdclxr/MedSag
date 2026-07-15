@@ -1,0 +1,88 @@
+# ─────────────────────────────────────────────
+# MedSeg .gitignore
+# ─────────────────────────────────────────────
+
+# ── Python ────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# ── 虚拟环境 ──────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+pip-wheel-metadata/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── 环境变量 / 敏感配置 ───────────────────────
+.env
+.env.*
+*.env
+secrets.py
+local_config.py
+
+# ── 数据库文件（运行时生成，含用户数据）──────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── 模型权重（体积庞大）─────────────────────────
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+checkpoints/
+
+# ── 运行时数据目录 ─────────────────────────────
+/opt/medseg_data/
+medseg_data/
+data/
+uploads/
+tmp/
+logs/
+*.log
+
+# ── 医学影像数据文件 ───────────────────────────
+*.mhd
+*.raw
+*.nii
+*.nii.gz
+*.dcm
+*.dicom
+
+# ── IDE / 编辑器 ───────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Jupyter Notebook ──────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── pytest / coverage ─────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ── mypy ──────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+
+# ── 一次性工具脚本（含本机绝对路径）─────────────
+fix_encoding.py
+check_syntax.py
+inspect_mhd.py

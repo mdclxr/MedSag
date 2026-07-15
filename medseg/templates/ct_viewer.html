@@ -1,0 +1,3201 @@
+{% extends "labeler_base.html" %}
+{% block title %}{{ project_name }} - CT Viewer{% endblock %}
+{% block content %}
+<style>
+main{flex:1 1 auto;overflow:hidden}
+.ct-page{display:flex;flex-direction:column;height:calc(100vh - 64px);overflow:hidden;background:#f8fafc;color:#1e293b;font-family:Inter,sans-serif}
+.ct-body{flex:1;display:flex;overflow:hidden;min-height:0}
+.ct-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px 8px 8px;border-bottom:1px solid #e2e8f0;background:#ffffff;box-shadow:0 2px 4px rgba(15,23,42,.05);position:relative;z-index:20}
+.ct-header.grid-header{justify-content:flex-start;margin:0;top:auto;position:relative;padding:8px 12px 8px 8px;box-shadow:0 2px 4px rgba(15,23,42,.05)}
+.ct-header .bulk-actions,
+.ct-header .grid-controls,
+.ct-header .ct-window-controls,
+.ct-header .ct-header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ct-header .bulk-actions{flex:0 0 auto;min-width:0}
+.ct-header .bulk-actions{gap:6px}
+.ct-header .ct-window-controls{flex:0 1 auto;min-width:0;margin-left:8px;gap:8px}
+.ct-header .ct-header-right{flex:0 0 auto;margin-left:88px}
+.ct-selection-meta{font-size:11px;font-weight:600;color:#64748b;margin-right:2px;white-space:nowrap}
+.ct-header .grid-btn,
+.ct-header .layout-btn{min-height:32px;padding:6px 10px;font-size:12px}
+.ct-header .grid-btn{background:#fff;border:1px solid #dbe4f0;border-radius:6px;cursor:pointer;transition:all .2s ease;display:flex;align-items:center;gap:6px;color:#0f172a}
+.ct-header .grid-btn:hover{background:#f8fafc;border-color:#2563eb}
+.ct-header .grid-btn:disabled{opacity:.5;cursor:not-allowed;background:#e2e8f0;border-color:#dbe4f0;color:#64748b}
+.ct-header .grid-btn i,
+.ct-header .layout-btn i{font-size:13px}
+.ct-field-label{font-size:11px;font-weight:700;color:#4a5780;white-space:nowrap}
+.ct-window-controls .pb,
+.ct-window-controls .class-chip,
+.ct-window-controls .class-sel,
+.ct-window-controls .wli{margin:0}
+.ct-status-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;background:#f8fafc;border:1px solid #dbe4f0;font-size:11px;color:#475569}
+.ct-status-dot{width:8px;height:8px;border-radius:999px;background:#f59e0b;flex:0 0 auto}
+.ct-progress{display:none;align-items:center;gap:8px;padding:6px 9px;border-radius:999px;background:#eff6ff;border:1px solid #bfdbfe;font-size:11px;color:#1d4ed8}
+.ct-progress-bar{width:92px;height:6px;border-radius:999px;background:#dbeafe;overflow:hidden}
+.ct-progress-fill{width:0;height:100%;background:linear-gradient(90deg,#2563eb,#38bdf8);transition:width .2s ease}
+.ai-preannotator-btn{position:relative;background:linear-gradient(45deg,#4CAF50,#66BB6A);color:#fff;border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:8px;overflow:hidden;transition:transform .3s ease,box-shadow .3s ease;z-index:1;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.ai-preannotator-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.ai-preannotator-btn:active{transform:translateY(0);box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.ai-preannotator-btn::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);transition:.5s}
+.ai-preannotator-btn:hover::before{left:100%}
+.ai-blind-trust{position:relative;background:linear-gradient(45deg,#4c70af,#6766bb);color:#fff;border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:8px;overflow:hidden;transition:transform .3s ease,box-shadow .3s ease;z-index:1;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.ai-blind-trust:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.ai-blind-trust:active{transform:translateY(0);box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.ai-blind-trust::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);transition:.5s}
+.ai-blind-trust:hover::before{left:100%}
+/* sidebar */
+.cts{width:290px;min-width:250px;background:#ffffff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;overflow:hidden}
+.vlist{flex:1;overflow-y:auto;padding:5px}
+.vi{padding:7px 8px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid #e2e8f0;background:#f8fafc;transition:.15s;display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start}
+.vi:hover{background:#eff6ff;border-color:#bfdbfe}
+.vi.sel{background:#dbeafe;border-color:#3b82f6}
+.vi-check{margin-top:3px}
+.vi-main{min-width:0}
+.vn{font-size:11px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vm{font-size:10px;color:#64748b}
+.vv{font-size:9px;color:#94a3b8;margin-top:3px;word-break:break-all}
+/* main area */
+.ctm{flex:1;display:flex;flex-direction:column;overflow:hidden}
+/* toolbar */
+.wli{width:58px;height:28px;background:#f1f5f9;border:1px solid #cbd5e1;color:#1e293b;padding:4px 7px;border-radius:6px;font-size:12px}
+.pb{padding:6px 10px;border-radius:8px;background:#f1f5f9;border:1px solid #cbd5e1;color:#64748b;cursor:pointer;font-size:11px;font-weight:600}
+.pb:hover{border-color:#3b82f6;color:#3b82f6}
+.class-sel{height:30px;min-width:138px;background:#f1f5f9;border:1px solid #cbd5e1;color:#1e293b;padding:4px 9px;border-radius:8px;font-size:11px}
+.class-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:#f8fafc;border:1px solid #cbd5e1;font-size:11px;color:#475569}
+.class-dot{width:8px;height:8px;border-radius:999px;flex:0 0 auto}
+/* 3-panel grid: Slicer style */
+.panels{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:3px;background:#e2e8f0;overflow:hidden;position:relative}
+.panel{position:relative;overflow:hidden;background:#0a0a0a;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:outline .15s}
+.panel:hover{outline:1px solid #2563eb}
+.axial .panel-lbl{background:rgba(220,30,30,.85);color:#fff}
+.sagittal .panel-lbl{background:rgba(230,160,0,.85);color:#fff}
+.coronal .panel-lbl{background:rgba(40,160,40,.85);color:#fff}
+.info-panel .panel-lbl{background:rgba(60,60,80,.85);color:#aaa}
+.info-panel{cursor:default}
+.panel{position:relative;overflow:hidden;background:#0a0a0a;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:outline .15s}
+.panel:hover{outline:1px solid #2563eb}
+.axial .panel-lbl{background:rgba(220,30,30,.85);color:#fff}
+.sagittal .panel-lbl{background:rgba(230,160,0,.85);color:#fff}
+.coronal .panel-lbl{background:rgba(40,160,40,.85);color:#fff}
+.info-panel .panel-lbl{background:rgba(60,60,80,.85);color:#aaa}
+.info-panel{cursor:default}
+.info-panel:hover{outline:none}
+.panel-lbl{position:absolute;top:4px;left:6px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;z-index:10;pointer-events:none}
+.panel canvas{position:absolute;inset:0;margin:auto;display:block;max-width:100%;max-height:100%;image-rendering:pixelated}
+.panel-hud{position:absolute;bottom:4px;left:5px;font-size:9px;font-family:monospace;color:#4fc;opacity:.8;pointer-events:none;z-index:10}
+.expand-hint{position:absolute;top:4px;right:6px;font-size:9px;color:#2563eb;opacity:0;transition:opacity .2s;pointer-events:none;z-index:10}
+.panel:hover .expand-hint{opacity:.7}
+/* maximized panel */
+.panel.maximized{position:absolute!important;inset:0!important;z-index:50!important;cursor:pointer}
+.panel.maximized canvas {right: 480px !important;}
+.panel.maximized .info-panel {
+  position: absolute !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 480px !important;
+  z-index: 55 !important;
+  border-left: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  display: flex !important;
+  visibility: visible !important;
+  order: initial !important;
+}
+.panel.maximized #ct-toolbar {right: 496px !important;}
+.panel.maximized #ct-mask-panel {right: 480px !important;}
+.panel.hidden-panel{visibility:hidden;pointer-events:none}
+.restore-btn{position:absolute;top:6px;right:8px;background:rgba(37,99,235,.85);color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:10px;cursor:pointer;z-index:60}
+
+/* Navigation Tabs */
+.det-tabs {
+  display: flex;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 8px;
+}
+.det-tab {
+  flex: 1;
+  padding: 8px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+}
+.det-tab.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+/* Action Tools */
+.det-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #475569;
+  margin-bottom: 8px;
+  border: 1px solid #e2e8f0;
+}
+.select-all-lbl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.tools-right {
+  display: flex;
+  gap: 6px;
+}
+.tools-right select {
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  color: #334155;
+  outline: none;
+}
+
+/* Nodule Row List */
+.nodule-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.15s;
+  cursor: default;
+}
+.nodule-item:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.nodule-main {
+  display: grid;
+  grid-template-columns: 210px 65px 85px 75px;
+  align-items: center;
+  gap: 8px;
+}
+.nodule-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+.nodule-idx {
+  font-weight: bold;
+  color: #475569;
+}
+.nodule-slice {
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.nodule-slice:hover {
+  background: #dbeafe;
+}
+.nodule-location {
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  outline: none;
+  background: #fff;
+  width: 120px;
+  text-overflow: ellipsis;
+}
+.nodule-size-info {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: #64748b;
+  text-align: center;
+}
+.nodule-size {
+  font-weight: 600;
+  color: #334155;
+}
+.nodule-volume {
+  font-size: 9px;
+  color: #94a3b8;
+}
+.nodule-texture, .nodule-risk {
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  outline: none;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+}
+.nodule-texture {
+  color: #0d9488;
+  border-color: #ccfbf1;
+  background: #f0fdfa;
+}
+.nodule-risk {
+  font-weight: 500;
+}
+.nodule-risk[data-level="低危"] { color: #16a34a; border-color: #dcfce7; background: #f0fdf4; }
+.nodule-risk[data-level="中危"] { color: #ea580c; border-color: #ffedd5; background: #fff7ed; }
+.nodule-risk[data-level="高危"] { color: #dc2626; border-color: #fee2e2; background: #fef2f2; }
+
+/* Signs & Checklist Dropdown */
+.nodule-signs-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  position: relative;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 6px;
+  margin-top: 4px;
+}
+.add-sign-btn {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  color: #64748b;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.add-sign-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: #94a3b8;
+}
+.signs-list {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.sign-pill {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid #e2e8f0;
+}
+.sign-pill .remove-sign {
+  cursor: pointer;
+  color: #94a3b8;
+  font-weight: bold;
+}
+.sign-pill .remove-sign:hover {
+  color: #ef4444;
+}
+
+.signs-dropdown {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  width: 320px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.signs-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  font-weight: bold;
+  color: #1e293b;
+}
+.signs-close {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.signs-close:hover {
+  background: #1d4ed8;
+}
+.signs-dropdown-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.signs-dropdown-grid label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* slice slider */
+.srow{display:flex;align-items:center;gap:4px;padding:4px 8px;background:#f1f5f9;border-top:1px solid #e2e8f0;font-size:10px;color:#64748b}
+.srow.single-axis{padding:8px 12px;gap:0}
+.sl-row{display:flex;align-items:center;gap:6px}
+.sl-row.hidden{display:none}
+.srow:not(.single-axis) .sl-row{flex:1 1 0;min-width:0}
+.srow:not(.single-axis) .sl-row .sl-wrap{flex:1 1 auto}
+.srow.single-axis .sl-row{display:none}
+.srow.single-axis .sl-row.active{display:flex}
+.srow.single-axis .sl-row.active{flex:1 1 auto}
+.srow.single-axis .sl-row .sl-wrap{min-height:24px}
+.srow.single-axis .sl-row input[type=range]{height:18px}
+.srow.single-axis .sl-row .mask-marks{height:8px}
+.srow.single-axis .sl-row .mask-mark{height:8px}
+.sl-wrap{flex:1;position:relative;display:flex;flex-direction:column;gap:1px;cursor:pointer}
+.sl-wrap input[type=range]{width:100%;accent-color:#2563eb;height:12px;margin:0;cursor:pointer}
+.mask-marks{position:relative;height:6px;width:100%;pointer-events:none}
+.mask-mark{position:absolute;top:0;width:2px;height:6px;border-radius:1px;transform:translateX(-50%);pointer-events:none}
+/* panel order: Axial=1(top-left), Info=2(top-right), Coronal=3(bottom-left), Sagittal=4(bottom-right) */
+#p-axial{order:1}
+#p-info{order:2;background:#ffffff!important}
+#p-coronal{order:3}
+#p-sagittal{order:4}
+.info-panel{flex-direction:column;align-items:stretch;justify-content:flex-start;overflow-y:auto;cursor:default!important}
+.info-panel:hover{outline:none!important}
+.irow{display:flex;justify-content:space-between;padding:3px 8px;border-bottom:1px solid #e2e8f0;font-size:10px}
+.ik{color:#64748b}.iv{color:#1e293b;font-weight:600}
+.det-panel{margin-top:0;padding:8px 14px 14px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);min-height:100%}
+.det-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}
+.det-title{font-size:13px;font-weight:800;color:#0f172a}
+.det-sub{font-size:10px;color:#64748b;margin-top:3px;line-height:1.4}
+.det-badge{flex:0 0 auto;font-size:9px;font-weight:700;padding:3px 8px;border-radius:999px;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe}
+.det-summary{border:1px solid #dbeafe;background:#eff6ff;border-radius:6px;padding:10px 12px;font-size:13px;font-weight:800;color:#1d4ed8}
+.det-empty{font-size:10px;color:#94a3b8;line-height:1.5}
+.det-advice{margin-top:10px;border-left:3px solid #38bdf8;background:#f0f9ff;color:#0f172a;font-size:11px;line-height:1.65;padding:9px 10px;border-radius:5px}
+.det-list{margin-top:10px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;padding:9px;display:flex;flex-direction:column;gap:7px}
+.det-item{font-size:11px;line-height:1.6;color:#334155}
+.det-item strong{color:#0f172a}
+.nleg{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.lc{display:flex;align-items:center;gap:2px;font-size:9px;color:#7a8cbb}
+.ls{width:8px;height:8px;border-radius:2px}
+/* ---- floating annotation toolbar (shown when panel maximized) ---- */
+#ct-toolbar{position:absolute;right:16px;top:50%;transform:translateY(-50%);display:none;flex-direction:column;align-items:center;gap:2px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;padding:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:60;pointer-events:auto}
+.ctb{width:32px;height:32px;border-radius:6px;border:1px solid transparent;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#334155;transition:.15s}
+.ctb:hover{background:#f1f5f9;color:#0f172a}
+.ctb.active{background:#e0e7ff;border-color:#818cf8;color:#4f46e5}
+#ct-mask-panel{position:absolute;right:0;bottom:0;display:none;width:245px;background:rgba(255,255,255,.96);border:1px solid #e2e8f0;border-radius:8px 0 0 0;padding:8px;box-shadow:0 4px 14px rgba(15,23,42,.16);z-index:60;pointer-events:auto;font-size:10px;color:#334155}
+.mask-panel-title{font-size:10px;font-weight:800;color:#0f172a;margin-bottom:6px}
+.mask-panel-row{display:flex;align-items:center;gap:6px;margin-top:6px}
+.mask-panel-row input[type=range]{flex:1;accent-color:#2563eb}
+.mask-panel-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:7px}
+.mask-panel-btn{border:1px solid #cbd5e1;background:#f8fafc;color:#1d4ed8;border-radius:5px;padding:5px;cursor:pointer;font-size:10px}
+.mask-panel-btn:hover{background:#eff6ff;border-color:#3b82f6}
+.mask-panel-btn.danger{color:#dc2626;background:#fff5f5;border-color:#fecaca}
+.mask-panel-file{font-size:9px;color:#2563eb;word-break:break-all;min-height:12px;margin-top:5px}
+.mask-panel-section{border-top:1px solid #e2e8f0;margin-top:8px;padding-top:8px}
+.mask-panel-section:first-child{border-top:0;margin-top:0;padding-top:0}
+/* polygon drawing overlay */
+#poly-canvas{position:absolute;inset:0;pointer-events:none;z-index:30}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1c2133;border:1px solid #2a3550;color:#ddd;padding:6px 14px;border-radius:6px;font-size:12px;opacity:0;pointer-events:none;transition:opacity .3s;z-index:9999}
+#toast.show{opacity:1}
+.loading{position:absolute;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:20;font-size:11px;color:#7a8cbb;flex-direction:column;gap:8px}
+.loading.show{display:flex}
+.spinner{width:24px;height:24px;border:2px solid #252d40;border-top-color:#2563eb;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.modal-mask{position:fixed;inset:0;background:rgba(15,23,42,.38);display:none;align-items:center;justify-content:center;z-index:9998}
+.modal-box{width:min(92vw,420px);background:#fff;border-radius:16px;border:1px solid #dbe4f0;box-shadow:0 20px 50px rgba(15,23,42,.2);padding:18px}
+.modal-title{font-size:16px;font-weight:800;color:#0f172a;margin-bottom:6px}
+.modal-sub{font-size:12px;color:#64748b;line-height:1.6;margin-bottom:14px}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fmt-btn{padding:12px 10px;border:1px solid #dbe4f0;border-radius:12px;background:#fff;cursor:pointer;font-size:12px;font-weight:700;color:#0f172a;text-align:left}
+.fmt-btn:hover,.fmt-btn.active{border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.modal-actions button{padding:8px 14px;border-radius:10px;border:1px solid #dbe4f0;background:#fff;cursor:pointer;font-size:12px;font-weight:700}
+.modal-actions .primary{background:#2563eb;border-color:#2563eb;color:#fff}
+@media (max-width: 1400px){
+  .ct-header{align-items:flex-start}
+  .ct-header .ct-header-right{margin-left:0}
+}
+@media (max-width: 960px){
+  .ct-body{flex-direction:column}
+  .cts{width:100%;min-width:0;max-height:220px;border-right:0;border-bottom:1px solid #e2e8f0}
+  .ct-header .bulk-actions,
+  .ct-header .ct-window-controls,
+  .ct-header .ct-header-right{flex:1 1 100%;min-width:0}
+  .ct-progress{width:100%;justify-content:flex-start}
+}
+</style>
+
+<div class="ct-page">
+  <div class="ct-header grid-header">
+    <div class="bulk-actions">
+      <span class="ct-selection-meta" id="ct-selection-meta">已选择 0 / {{ volumes|length }} 个文件</span>
+      <button class="grid-btn" type="button" title="全选" onclick="toggleSelectAllCTVolumes(!(document.getElementById('select-all-volumes')?.checked))">
+        <i class="fas fa-check-square"></i> 全选
+      </button>
+      <button class="grid-btn" type="button" id="delete-ct-btn" title="删除选中" onclick="deleteSelectedCTVolumes()" disabled>
+        <i class="fas fa-trash"></i> 删除
+      </button>
+      <button class="grid-btn" type="button" title="导入更多 CT 文件" onclick="openCTImportDialog()">
+        <i class="fas fa-upload"></i> 导入
+      </button>
+      <button class="grid-btn" type="button" id="export-ct-btn" title="导出医学影像标注" onclick="openCTExportDialog()" {% if not volumes %}disabled{% endif %}>
+        <i class="fas fa-file-export"></i> 导出
+      </button>
+    </div>
+    <div class="ct-window-controls">
+      <input type="checkbox" id="select-all-volumes" style="display:none" onchange="toggleSelectAllCTVolumes(this.checked)">
+      <span class="ct-field-label">WW</span>
+      <input class="wli" id="ww" type="number" value="1500" onchange="reloadAll()">
+      <span class="ct-field-label">WC</span>
+      <input class="wli" id="wc" type="number" value="-600" onchange="reloadAll()">
+      <button class="pb" type="button" onclick="preset(400,40)">软组织</button>
+      <button class="pb" type="button" onclick="preset(1500,-600)">肺窗</button>
+      <button class="pb" type="button" onclick="preset(1500,300)">骨窗</button>
+      <span class="ct-field-label">类别</span>
+      <select id="ct-class-select" class="class-sel" onchange="setActiveCTClass(+this.value)"></select>
+      <span class="class-chip" id="ct-class-chip"><span class="class-dot" id="ct-class-dot"></span><span id="ct-class-name">未选择</span></span>
+      <button class="pb" type="button" onclick="initBlankMask()">初始化掩码</button>
+    </div>
+    <div class="ct-header-right">
+      <button id="btn-medsam2" class="layout-btn ai-preannotator-btn" type="button" title="AI预标注器" onclick="triggerMedSAM2()">
+        <i class="fas fa-robot"></i> AI预标注器
+      </button>
+      <button id="ai-blind-trust" class="layout-btn ai-blind-trust" type="button" title="盲信任" onclick="toast('盲信任功能开发中')">
+        <i class="fa-solid fa-fingerprint"></i> 盲信任
+      </button>
+      <span class="ct-status-chip" id="medsam2-status-chip">
+        <span class="ct-status-dot" id="medsam2-dot"></span>
+        <span id="medsam2-status-txt">状态检查中</span>
+      </span>
+      <span class="ct-status-chip" id="medsam2-prompt-chip">
+        <span class="ct-status-dot" id="medsam2-prompt-dot" style="background:#94a3b8"></span>
+        <span id="medsam2-prompt-txt">未设置提示点</span>
+      </span>
+      <div class="ct-progress" id="medsam2-prog-wrap">
+        <div class="ct-progress-bar"><div class="ct-progress-fill" id="medsam2-prog-bar"></div></div>
+        <span id="medsam2-prog-txt">准备中</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ct-body">
+    <div class="cts">
+      <div class="vlist">
+    {% if volumes %}
+      {% for v in volumes %}
+      <div class="vi" data-id="{{ v.volume_id }}" data-name="{{ v.name }}"
+           data-sx="{{ v.shape_x }}" data-sy="{{ v.shape_y }}" data-sz="{{ v.shape_z }}"
+           data-spx="{{ v.spacing_x }}" data-spy="{{ v.spacing_y }}" data-spz="{{ v.spacing_z }}"
+           data-path="{{ v.absolute_path }}"
+           data-nii="{{ v.nii_path or '' }}" data-csv="{{ v.csv_path or '' }}" onclick="selVol(this, event)">
+        <input class="vi-check ct-volume-checkbox" type="checkbox" value="{{ v.volume_id }}" onchange="onCTVolumeCheckboxChange(event)" onclick="event.stopPropagation()">
+        <div class="vi-main">
+          <div class="vn" title="{{ v.name }}">{{ v.name }}</div>
+          <div class="vm">{{ v.shape_x }}×{{ v.shape_y }}×{{ v.shape_z }}</div>
+          <div class="vv">
+            {% if v.nii_path %}
+              {% if v.csv_path %}
+                已生成掩码（来源：CSV）
+              {% else %}
+                已有关联掩码
+              {% endif %}
+            {% else %}
+              {% if v.csv_path %}
+                待自动生成掩码（CSV）
+              {% else %}
+                待自动生成空白掩码
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="padding:12px;text-align:center;color:#2a3550;font-size:11px">暂无 CT 数据</div>
+    {% endif %}
+      </div>
+    </div>
+
+    <div class="ctm">
+
+  <div class="panels" id="panels">
+    <!-- Axial (Red) -->
+    <div class="panel axial" id="p-axial" onclick="onPanelClick('axial',event)">
+      <div class="panel-lbl">🔴 轴状面 Axial</div>
+      <span class="expand-hint">⛶ 点击放大</span>
+      <canvas id="c-axial"></canvas>
+      <canvas id="ov-axial" style="pointer-events:none"></canvas>
+      <div class="panel-hud" id="hud-axial"></div>
+      <div class="loading" id="ld-axial"><div class="spinner"></div></div>
+    </div>
+    <!-- Sagittal (Yellow) -->
+    <div class="panel sagittal" id="p-sagittal" onclick="onPanelClick('sagittal',event)">
+      <div class="panel-lbl">🟡 矢状面 Sagittal</div>
+      <span class="expand-hint">⛶ 点击放大</span>
+      <canvas id="c-sagittal"></canvas>
+      <canvas id="ov-sagittal" style="pointer-events:none"></canvas>
+      <div class="panel-hud" id="hud-sagittal"></div>
+      <div class="loading" id="ld-sagittal"><div class="spinner"></div></div>
+    </div>
+    <!-- Coronal (Green) -->
+    <div class="panel coronal" id="p-coronal" onclick="onPanelClick('coronal',event)">
+      <div class="panel-lbl">🟢 冠状面 Coronal</div>
+      <span class="expand-hint">⛶ 点击放大</span>
+      <canvas id="c-coronal"></canvas>
+      <canvas id="ov-coronal" style="pointer-events:none"></canvas>
+      <div class="panel-hud" id="hud-coronal"></div>
+      <div class="loading" id="ld-coronal"><div class="spinner"></div></div>
+    </div>
+    <div class="panel info-panel" id="p-info">
+      <!-- ===== Medical Detection Panel ===== -->
+      <div class="det-panel" style="display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding: 10px;">
+        <!-- Top Navigation Tabs -->
+        <div class="det-tabs">
+          <button class="det-tab active" id="tab-nodule">肺结节 (<span id="count-nodule">0</span>)</button>
+          <button class="det-tab" id="tab-fracture" onclick="alert('骨折检测模型预留中，即将上线！')">骨折 (0)</button>
+        </div>
+
+        <!-- Action Tools Bar -->
+        <div class="det-tools">
+          <label class="select-all-lbl">
+            <input type="checkbox" id="det-select-all" onchange="toggleSelectAllNodules(this)"> 
+            全选 (<span id="selected-count-label">0/0</span>)
+          </label>
+          <div class="tools-right">
+            <select id="filter-all" onchange="filterNodules()"><option value="all">全部</option></select>
+            <select id="filter-cond" onchange="filterNodules()">
+              <option value="all">筛选 (所有)</option>
+              <option value="低危">低危结节</option>
+              <option value="中危">中危结节</option>
+              <option value="高危">高危结节</option>
+              <option value="实性">实性结节</option>
+              <option value="磨玻璃">磨玻璃结节</option>
+            </select>
+            <select id="sort-cond" onchange="sortNodules()">
+              <option value="default">默认排序</option>
+              <option value="size-desc">大小 (从大到小)</option>
+              <option value="size-asc">大小 (从小到大)</option>
+              <option value="slice-asc">切片位置 (从前到后)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Scrollable Nodule List -->
+        <div id="det-list" style="flex: 1; overflow-y: auto; min-height: 150px; margin-bottom: 8px;">
+          <div class="det-empty">暂无检测结果</div>
+        </div>
+
+        <!-- Right Bottom Tab Panel for Diagnostic & Follow-up History -->
+        <div class="right-bottom-panel" style="height: 220px; border-top: 1px solid #cbd5e1; display: flex; flex-direction: column; background: #ffffff; box-sizing: border-box; flex-shrink: 0; margin-top: 4px;">
+          <!-- Tabs Header -->
+          <div class="det-tabs" style="margin-bottom: 0; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex;">
+            <button class="det-tab active" id="tab-report" onclick="switchRightTab('report')" style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border-bottom: 2px solid #2563eb; background: none; border-top: none; border-left: none; border-right: none; cursor: pointer; color: #2563eb;">诊断报告</button>
+            <button class="det-tab" id="tab-followup" onclick="switchRightTab('followup')" style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border-bottom: 2px solid transparent; background: none; border-top: none; border-left: none; border-right: none; cursor: pointer; color: #64748b;">随访记录</button>
+          </div>
+          
+          <!-- Tabs Content -->
+          <div class="right-tab-content" style="flex: 1; padding: 8px; overflow-y: auto; font-size: 11px; color: #334155; line-height: 1.5; background: #ffffff;">
+            <!-- Report Section -->
+            <div id="content-report" style="display: block;">
+              <div style="margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 700; font-size: 11px; color: #0f172a;">AI 诊断意见</span>
+                <button class="add-sign-btn" style="padding: 1px 6px; font-size: 9px; margin: 0; line-height: 1;" onclick="copyReportText()">复制</button>
+              </div>
+              <div id="det-advice" style="background: #f0f9ff; border-left: 3px solid #0284c7; padding: 8px; border-radius: 4px; color: #0369a1; min-height: 80px; white-space: pre-wrap; font-size: 10px;">
+                加载当前 CT 后，诊断意见将在此同步生成。
+              </div>
+            </div>
+            
+            <!-- Follow-up Section -->
+            <div id="content-followup" style="display: none;">
+              <div style="font-weight: 700; font-size: 11px; color: #0f172a; margin-bottom: 8px;" id="followup-title">患者随访历史</div>
+              <div id="left-followup-list" style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="color: #94a3b8; text-align: center; padding-top: 15px;">加载当前 CT 后，自动关联同名患者的历史诊断。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status Indicators (Maintained for backward compatibility) -->
+        <div style="display: none;">
+          <div id="det-current-image-id">当前图像：未选择</div>
+          <div id="det-source">请选择 CT 体数据</div>
+          <div id="det-badge">待检测</div>
+          <div id="det-count">检测数量：--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sliders row -->
+  <div class="srow" id="ct-slider-row">
+    <div class="sl-row" data-axis-row="z">
+      <span style="color:#dc2626;font-weight:700;font-size:9px;min-width:20px">AX</span>
+      <div class="sl-wrap" onclick="onSlWrapClick(event, 'z')">
+        <input type="range" id="sl-z" min="0" max="100" value="0" oninput="onSl('z',+this.value)">
+        <div class="mask-marks" id="mm-z"></div>
+      </div>
+      <span id="si-z" style="min-width:48px">0/0</span>
+    </div>
+    <div class="sl-row" data-axis-row="x">
+      <span style="color:#d97706;font-weight:700;font-size:9px;min-width:20px">SA</span>
+      <div class="sl-wrap" onclick="onSlWrapClick(event, 'x')">
+        <input type="range" id="sl-x" min="0" max="100" value="0" oninput="onSl('x',+this.value)">
+        <div class="mask-marks" id="mm-x"></div>
+      </div>
+      <span id="si-x" style="min-width:48px">0/0</span>
+    </div>
+    <div class="sl-row" data-axis-row="y">
+      <span style="color:#16a34a;font-weight:700;font-size:9px;min-width:20px">CO</span>
+      <div class="sl-wrap" onclick="onSlWrapClick(event, 'y')">
+        <input type="range" id="sl-y" min="0" max="100" value="0" oninput="onSl('y',+this.value)">
+        <div class="mask-marks" id="mm-y"></div>
+      </div>
+      <span id="si-y" style="min-width:48px">0/0</span>
+    </div>
+  </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<input type="file" id="nf" accept=".nii,.nii.gz" style="display:none" onchange="onNF(this)">
+<input type="file" id="ct-import-input" accept=".mhd,.raw,.nii,.nii.gz,.csv,.zip,.tar,.tar.gz,.rar" multiple style="display:none" onchange="handleCTImportFiles(event)">
+
+<div class="modal-mask" id="ct-export-modal">
+  <div class="modal-box">
+    <div class="modal-title">导出医学影像标注</div>
+    <div class="modal-sub">可导出全部文件，或只导出当前勾选的 CT 文件。导出内容以分割掩码和结构化标注摘要为主。</div>
+    <div class="modal-grid" id="ct-format-grid">
+      <button class="fmt-btn active" data-format="nifti" onclick="setCTExportFormat('nifti')">NIfTI (.nii.gz)</button>
+      <button class="fmt-btn" data-format="nrrd" onclick="setCTExportFormat('nrrd')">NRRD (.nrrd)</button>
+      <button class="fmt-btn" data-format="mhd" onclick="setCTExportFormat('mhd')">MetaImage (.mhd/.raw)</button>
+      <button class="fmt-btn" data-format="mha" onclick="setCTExportFormat('mha')">MetaImage 单文件 (.mha)</button>
+      <button class="fmt-btn" data-format="csv" onclick="setCTExportFormat('csv')">CSV 标注摘要</button>
+    </div>
+    <div class="modal-actions">
+      <button onclick="closeCTExportDialog()">取消</button>
+      <button class="primary" onclick="confirmCTExport()">开始导出</button>
+    </div>
+  </div>
+</div>
+
+<!-- VisioFirm-style floating annotation toolbar (shown when panel maximized) -->
+<div id="ct-toolbar">
+  <button class="ctb" id="ctb-brush" title="画笔涂鸦 (B)" onclick="setCTTool('brush')">✏️</button>
+  <button class="ctb" id="ctb-eraser" title="橡皮擦 (E)" onclick="setCTTool('eraser')">🧹</button>
+  <button class="ctb" id="ctb-auto" title="利用模型一键标注" onclick="toast('一键标注开发中')">
+    <img src="{{ url_for('static', filename='img/logos/magic-mode.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb active" id="ctb-select" title="选中标注 (V)" onclick="setCTTool('select')">
+    <img src="{{ url_for('static', filename='img/logos/select-mode.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb" id="ctb-restore" title="重置视图" onclick="restorePanels()">
+    <img src="{{ url_for('static', filename='img/logos/reset-view.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb" id="ctb-undo" title="撤销上一步操作 (Ctrl+Z)" onclick="doUndo()">
+    <img src="{{ url_for('static', filename='img/logos/undo-btn.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb" id="ctb-delete" title="删除当前切片所有掩码" onclick="deleteSliceMask()">
+    <img src="{{ url_for('static', filename='img/logos/delete-btn.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb" id="ctb-zoomin" title="放大图像" onclick="ctZoom(1.2)">
+    <img src="{{ url_for('static', filename='img/logos/zoom-in-btn.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb" id="ctb-zoomout" title="缩小图像" onclick="ctZoom(0.8)">
+    <img src="{{ url_for('static', filename='img/logos/zoom-out-btn.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb" id="ctb-copy" title="复制选中的标注" onclick="copyToAdjacentSlice()">
+    <img src="{{ url_for('static', filename='img/logos/duplicate-btn.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb" id="ctb-save" title="保存标注 (Ctrl+S)" onclick="doSave()">
+    <img src="{{ url_for('static', filename='img/logos/save-btn.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb" id="ctb-grid" title="切换网格" onclick="toast('网格功能开发中')">
+    <img src="{{ url_for('static', filename='img/logos/grid-btn.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb" id="ctb-prev" title="上一张" onclick="stepSlice(-1)">
+    <img src="{{ url_for('static', filename='img/logos/prev-image-btn.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+  <button class="ctb" id="ctb-next" title="下一张" onclick="stepSlice(1)">
+    <img src="{{ url_for('static', filename='img/logos/next-image-btn.svg') }}" style="width:20px;height:20px;object-fit:contain">
+  </button>
+</div>
+
+<div id="ct-mask-panel">
+  <div class="mask-panel-section">
+    <div class="mask-panel-title">标注工具</div>
+    <div class="mask-panel-row">
+      <span>笔刷/橡皮擦</span>
+      <input type="range" id="brush-size" min="1" max="20" value="4"
+        oninput="brushRadius=+this.value;document.getElementById('bsv').textContent=this.value+'px'">
+      <span id="bsv">4px</span>
+    </div>
+  </div>
+  <div class="mask-panel-section">
+    <div class="mask-panel-title">分割掩码</div>
+    <div class="mask-panel-file" id="nfn">未加载掩码</div>
+    <div class="mask-panel-row">
+      <span>透明度</span>
+      <input type="range" id="nalpha" min="0" max="255" value="180"
+        oninput="nAlpha=+this.value;document.getElementById('nav').textContent=this.value;if(niiPath&&niiVis){nCache={};loadAll();}">
+      <span id="nav">180</span>
+    </div>
+    <div class="mask-panel-actions">
+      <button class="mask-panel-btn" id="ntb" onclick="togNii()">显示掩码</button>
+      <button class="mask-panel-btn danger" onclick="clrNii()">清除</button>
+    </div>
+    <div class="nleg" id="nleg"></div>
+  </div>
+</div>
+
+
+<script>
+const PRJ = {{ project_name | tojson }};
+const CT_CLASSES = {{ ct_classes | tojson }};
+let curId=null, curMeta={sx:1,sy:1,sz:1,spx:1,spy:1,spz:1,name:''};
+let idx={z:0,y:0,x:0}, maxIdx={z:0,y:0,x:0};
+let ww=1500, wc=-600;
+let imgCache={};
+let niiPath=null, niiVis=true, nAlpha=180, nCache={};
+let timers={z:null,y:null,x:null};
+const CLR=['rgb(255,100,50)','rgb(50,200,100)','rgb(50,130,255)','rgb(220,50,220)','rgb(255,220,50)','rgb(50,220,220)'];
+let activeCTClassValue = (CT_CLASSES[0] && +CT_CLASSES[0].value) || 1;
+let ctExportFormat = 'nifti';
+
+// ========== Paint / Annotation tools ==========
+let ctTool='select';     // default to select so clicking doesn't draw points immediately
+let currentTool='pan';   // old brush tool
+let paintLabel=activeCTClassValue;
+let brushRadius=4;
+let _painting=false, _strokePts=[], _strokeAxis=null, _strokeSlice=null, _lastStrokeCanvasPt=null;
+
+function _isToolbarEvent(e){
+  return !!(e && e.target && e.target.closest('#ct-toolbar,#ct-mask-panel'));
+}
+
+function _isInteractiveEvent(e){
+  return !!(e && e.target && e.target.closest('button,input,select,textarea,a,label'));
+}
+
+function _isPaintSuppressed(pn){
+  if(!maximizedPanel) return true;
+  return maximizedPanel === pn && !['brush','eraser'].includes(ctTool);
+}
+
+function _activePaintTool(){
+  if(maximizedPanel) {
+    return ctTool === 'brush' ? 'brush' : (ctTool === 'eraser' ? 'eraser' : 'pan');
+  }
+  return 'pan';
+}
+
+function setTool(t){
+  currentTool=t;
+  ['pan','brush','eraser'].forEach(n=>{
+    const b=document.getElementById('tool-'+n);
+    if(b) b.classList.toggle('active',n===t);
+  });
+  // Change cursor on all CT panels
+  ['axial','sagittal','coronal'].forEach(pn=>{
+    const p=document.getElementById('p-'+pn);
+    if(p) p.style.cursor = t==='pan'?'default':(t==='brush'?'crosshair':'cell');
+  });
+  const ps=document.getElementById('paint-status');
+  if(ps) ps.textContent = t==='pan'?'':''+( t==='brush'?'🖊 画笔模式 — 左键涂抹':'🧹 橡皮擦模式 — 左键擦除');
+}
+
+function getCTClassMeta(value){
+  return CT_CLASSES.find(c => +c.value === +value) || CT_CLASSES[0] || {name:'未分类', value:1, color:'#ff6432'};
+}
+
+function _hexToRgb(hex){
+  const safe = String(hex || '').replace('#', '');
+  if(safe.length !== 6) return {r:255,g:100,b:50};
+  return {
+    r: parseInt(safe.slice(0, 2), 16),
+    g: parseInt(safe.slice(2, 4), 16),
+    b: parseInt(safe.slice(4, 6), 16),
+  };
+}
+
+function setActiveCTClass(value){
+  activeCTClassValue = +value || 1;
+  paintLabel = activeCTClassValue;
+  const meta = getCTClassMeta(activeCTClassValue);
+  const sel = document.getElementById('ct-class-select');
+  if(sel) sel.value = String(meta.value);
+  const dot = document.getElementById('ct-class-dot');
+  const name = document.getElementById('ct-class-name');
+  if(dot) dot.style.background = meta.color;
+  if(name) name.textContent = meta.name;
+}
+
+function initCTClasses(){
+  const sel = document.getElementById('ct-class-select');
+  if(!sel) return;
+  sel.innerHTML = CT_CLASSES.map(c => `<option value="${c.value}">${c.name}</option>`).join('');
+  setActiveCTClass(activeCTClassValue);
+}
+
+function clearActiveAnnoSelection(redraw = true){
+  vectorAnnos = [];
+  activeAnno = null;
+  _activeAnnoDirty = false;
+  if(redraw) _drawPolyPreview();
+}
+
+// canvas pixel → voxel coordinates
+function canvasToVoxel(ax, cx, cy, cvs){
+  const cw=cvs.width, ch=cvs.height;
+  if(!cw||!ch) return null;
+  switch(ax){
+    case 'z': return {vz:idx.z, vy:Math.round(cy/ch*curMeta.sy), vx:Math.round(cx/cw*curMeta.sx)};
+    case 'y': return {vz:Math.round((1 - cy/ch)*curMeta.sz), vy:idx.y, vx:Math.round(cx/cw*curMeta.sx)};
+    case 'x': return {vz:Math.round((1 - cy/ch)*curMeta.sz), vy:Math.round(cx/cw*curMeta.sy), vx:idx.x};
+  }
+}
+
+// draw brush cursor preview on overlay canvas
+const _axPanelName={z:'axial',y:'coronal',x:'sagittal'};
+function drawCursor(ax, cx, cy, erase){
+  const pn=_axPanelName[ax];
+  const cv=document.getElementById('c-'+pn);
+  if(!cv) return;
+  const cw=cv.width, ch=cv.height;
+  const rpx = brushRadius * (ax==='z'?(cw/Math.max(1,curMeta.sx)):(ch/Math.max(1,curMeta.sz)));
+  
+  let cc = document.getElementById('cursor-'+pn);
+  if(!cc) {
+      cc = document.createElement('canvas');
+      cc.id = 'cursor-'+pn;
+      cc.style.cssText = 'position:absolute;inset:0;margin:auto;z-index:40;pointer-events:none;display:block;max-width:100%;max-height:100%;image-rendering:pixelated';
+      document.getElementById('p-'+pn).appendChild(cc);
+  }
+  cc.width = cw; cc.height = ch;
+  if(cv.style.transform) cc.style.transform = cv.style.transform;
+  
+  const ctx=cc.getContext('2d');
+  ctx.clearRect(0,0,cw,ch);
+  ctx.beginPath();
+  ctx.arc(cx,cy,Math.max(2,rpx),0,Math.PI*2);
+  ctx.strokeStyle=erase?'rgba(239,68,68,.9)':'rgba(59,130,246,.9)';
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+}
+
+function _onPanelMousedown(pn, e){
+  if(_isToolbarEvent(e) || _isInteractiveEvent(e)) return;
+  if(_isPaintSuppressed(pn)) return;
+  const paintTool = _activePaintTool();
+  if(paintTool==='pan'||!niiPath) return;
+  if(e.button!==0) return;
+  const ov=document.getElementById('ov-'+pn);
+  if(!_isEventInsideCanvas(e, ov)) return;
+  e.preventDefault();
+  _painting=true;
+  _strokePts=[];
+  _lastStrokeCanvasPt=null;
+  _strokeAxis={axial:'z',sagittal:'x',coronal:'y'}[pn];
+  _strokeSlice=idx[_strokeAxis];
+  _addStrokePt(pn, e);
+}
+function _onPanelMousemove(pn, e){
+  if(!_painting) return;
+  if(_isPaintSuppressed(pn)) return;
+  if(!_isEventInsideCanvas(e, document.getElementById('ov-'+pn))) return;
+  _addStrokePt(pn, e);
+}
+function _onPanelMouseup(pn, e){
+  if(!_painting) return;
+  _painting=false;
+  if(_strokePts.length && niiPath){
+    const paintTool = _activePaintTool();
+    const label = paintTool==='eraser'?0:paintLabel;
+    fetch('/nii_mask_edit',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({nii_path:niiPath, axis:_strokeAxis, slice_idx:_strokeSlice,
+        points:_strokePts, radius:brushRadius, label})
+    }).then(r=>r.json()).then(d=>{
+      if(d.success){
+        nCache={};  // invalidate overlay cache
+        // refresh all 3 views' mask overlays
+        ['z','y','x'].forEach(a=>loadNiiSlice(a));
+        // also update mask markers
+        loadMaskSlices(niiPath);
+        if(label > 0 && _strokeAxis === 'z'){
+          _rememberManualMaskSlice(_strokeAxis, _strokeSlice);
+        }
+        updDetectionInfo();
+        const ps=document.getElementById('paint-status');
+        if(ps){
+          ps.textContent='✓ 已保存';
+          setTimeout(()=>ps.textContent=currentTool==='pan'?'':''+( currentTool==='brush'?'🖊 画笔模式':'🧹 橡皮擦模式'), 1500);
+        }
+      } else { toast('❌ 保存失败:'+d.error); }
+    }).catch(e=>toast('❌ 网络错误:'+e));
+    _strokePts=[];
+    _lastStrokeCanvasPt=null;
+  }
+}
+function _addStrokePt(pn, e){
+  const ov=document.getElementById('ov-'+pn);
+  if(!ov) return;
+  const {cx, cy} = _getCanvasCoords(e, ov);
+  const ax={axial:'z',sagittal:'x',coronal:'y'}[pn];
+  const cv=document.getElementById('c-'+pn);
+  const cw=cv.width, ch=cv.height;
+  const rpx = brushRadius * (ax==='z'?(cw/Math.max(1,curMeta.sx)):(ch/Math.max(1,curMeta.sz)));
+  const prev = _lastStrokeCanvasPt;
+  const dist = prev ? Math.hypot(cx - prev.cx, cy - prev.cy) : 0;
+  const steps = Math.max(1, Math.ceil(dist / Math.max(1, rpx * 0.45)));
+  const canvasPts = [];
+  for(let i=1; i<=steps; i++){
+    const t = i / steps;
+    const px = prev ? prev.cx + (cx - prev.cx) * t : cx;
+    const py = prev ? prev.cy + (cy - prev.cy) * t : cy;
+    canvasPts.push({cx:px, cy:py});
+    const vox=canvasToVoxel(ax,px,py,cv);
+    if(vox) _strokePts.push(vox);
+  }
+  _lastStrokeCanvasPt = {cx, cy};
+
+  if(_painting) {
+    const ctx = ov.getContext('2d');
+    const paintTool = _activePaintTool();
+    if(paintTool==='eraser'){
+      ctx.globalCompositeOperation = 'destination-out';
+      canvasPts.forEach(p=>{
+        ctx.beginPath();
+        ctx.arc(p.cx, p.cy, Math.max(2, rpx), 0, Math.PI*2);
+        ctx.fill();
+      });
+      ctx.globalCompositeOperation = 'source-over';
+    } else {
+      const meta = getCTClassMeta(paintLabel);
+      const rgb = _hexToRgb(meta.color);
+      ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.7)`;
+      canvasPts.forEach(p=>{
+        ctx.beginPath();
+        ctx.arc(p.cx, p.cy, Math.max(2, rpx), 0, Math.PI*2);
+        ctx.fill();
+      });
+    }
+  }
+  
+  drawCursor(ax,cx,cy,_activePaintTool()==='eraser');
+}
+
+// Attach events to all 3 CT panels
+['axial','sagittal','coronal'].forEach(pn=>{
+  const el=document.getElementById('p-'+pn);
+  if(!el) return;
+  el.addEventListener('mousedown',e=>_onPanelMousedown(pn,e));
+  el.addEventListener('mousemove',e=>{ if(_painting)_onPanelMousemove(pn,e); else if(_activePaintTool()!=='pan'){
+    if(_isPaintSuppressed(pn)) return;
+    if(_isToolbarEvent(e) || _isInteractiveEvent(e)) return;
+    const ax={axial:'z',sagittal:'x',coronal:'y'}[pn];
+    const ov=document.getElementById('ov-'+pn);
+    if(!ov) return;
+    if(!_isEventInsideCanvas(e, ov)) return;
+    const {cx, cy} = _getCanvasCoords(e, ov);
+    drawCursor(ax,cx,cy,_activePaintTool()==='eraser');
+  }});
+  el.addEventListener('mouseup',  e=>_onPanelMouseup(pn,e));
+  el.addEventListener('mouseleave',()=>{
+    if(_painting) _onPanelMouseup(pn,{button:0});
+    // clear cursor preview
+    const cc=document.getElementById('cursor-'+pn);
+    if(cc) cc.getContext('2d').clearRect(0,0,cc.width,cc.height);
+  });
+});
+
+function onSl(a, v){
+  idx[a] = Math.max(0, Math.min(maxIdx[a], Math.round(+v)));
+  clearActiveAnnoSelection(true);
+  document.getElementById('sl-'+a).value = idx[a];
+  updSI(a);
+  loadSlice(a);
+}
+
+function onSlWrapClick(e, ax) {
+   if(e.target.tagName === 'INPUT') return;
+   const rect = e.currentTarget.getBoundingClientRect();
+   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+   const val = Math.round(pct * maxIdx[ax]);
+   document.getElementById('sl-'+ax).value = val;
+   onSl(ax, val);
+}
+
+function doUndo(){
+  if(!niiPath){toast('请先加载掩码文件');return;}
+  fetch('/nii_mask_undo',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({nii_path:niiPath})
+  }).then(r=>r.json()).then(d=>{
+    if(d.success){
+      nCache={};
+      ['z','y','x'].forEach(a=>loadNiiSlice(a));
+      loadMaskSlices(niiPath);
+      updDetectionInfo();
+      const msg = d.undo_kind === 'volume_restore' ? '↩ 已撤销上一步 AI 分割' : '↩ 已撤销';
+      toast(msg);
+    }
+    else toast('⚠ '+d.error);
+  });
+}
+async function doSave(){
+  if(curId===null){ toast('请先选择一个 CT 体数据'); return; }
+  if(!niiPath){ toast('请先初始化或加载掩码文件'); return; }
+  try {
+    const resp = await fetch(`/save_ct_annotations/${encodeURIComponent(PRJ)}/${curId}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ nii_path: niiPath })
+    });
+    const data = await resp.json();
+    if(!resp.ok || !data.success){
+      throw new Error(data.error || `保存失败 (${resp.status})`);
+    }
+
+    if(data.nii_path){
+      niiPath = data.nii_path;
+      const el = document.querySelector(`.vi[data-id="${curId}"]`);
+      if(el) el.dataset.nii = data.nii_path;
+      const nfn=document.getElementById('nfn');
+      if(nfn) nfn.textContent=data.nii_path.split(/[\\/]/).pop();
+    }
+
+    toast(data.copied_to_project ? '✓ CT 标注已保存并归档到项目目录' : '✓ CT 标注已保存');
+  } catch (error) {
+    toast(`❌ ${error.message}`);
+  }
+}
+
+function exportCTAnnotations(){
+  openCTExportDialog();
+}
+
+function getSelectedCTVolumeIds(){
+  return Array.from(document.querySelectorAll('.ct-volume-checkbox:checked')).map(el => Number(el.value));
+}
+
+function updateCTBulkActionState(){
+  const selected = getSelectedCTVolumeIds();
+  const total = document.querySelectorAll('.ct-volume-checkbox').length;
+  const meta = document.getElementById('ct-selection-meta');
+  if(meta) meta.textContent = `已选择 ${selected.length} / ${total} 个文件`;
+  const all = document.getElementById('select-all-volumes');
+  if(all){
+    all.checked = total > 0 && selected.length === total;
+    all.indeterminate = selected.length > 0 && selected.length < total;
+  }
+  ['delete-ct-btn'].forEach(id=>{
+    const btn = document.getElementById(id);
+    if(btn) btn.disabled = selected.length === 0;
+  });
+  const exportBtn = document.getElementById('export-ct-btn');
+  if(exportBtn) exportBtn.disabled = total === 0;
+}
+
+function onCTVolumeCheckboxChange(event){
+  if(event) event.stopPropagation();
+  updateCTBulkActionState();
+}
+
+function toggleSelectAllCTVolumes(checked){
+  document.querySelectorAll('.ct-volume-checkbox').forEach(cb => { cb.checked = checked; });
+  updateCTBulkActionState();
+}
+
+function openCTExportDialog(){
+  const modal = document.getElementById('ct-export-modal');
+  if(modal) modal.style.display = 'flex';
+}
+
+function closeCTExportDialog(){
+  const modal = document.getElementById('ct-export-modal');
+  if(modal) modal.style.display = 'none';
+}
+
+function setCTExportFormat(format){
+  ctExportFormat = format;
+  document.querySelectorAll('#ct-format-grid .fmt-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.format === format);
+  });
+}
+
+function confirmCTExport(){
+  const selected = getSelectedCTVolumeIds();
+  const params = new URLSearchParams();
+  params.set('format', ctExportFormat);
+  selected.forEach(id => params.append('volume_ids', String(id)));
+  closeCTExportDialog();
+  window.location.href = `/export_ct_annotations/${encodeURIComponent(PRJ)}?${params.toString()}`;
+}
+
+async function downloadSelectedCTVolumes(){
+  const selected = getSelectedCTVolumeIds();
+  if(!selected.length){ toast('请先选择要下载的 CT 文件'); return; }
+  try{
+    const resp = await fetch(`/download_ct_volumes/${encodeURIComponent(PRJ)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({volume_ids:selected})
+    });
+    if(!resp.ok) throw new Error('下载失败');
+    const blob = await resp.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${PRJ}_ct_volumes.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  }catch(error){
+    toast(`❌ ${error.message}`);
+  }
+}
+
+async function deleteSelectedCTVolumes(){
+  const selected = getSelectedCTVolumeIds();
+  if(!selected.length){ toast('请先选择要删除的 CT 文件'); return; }
+  if(!confirm(`确定删除选中的 ${selected.length} 个 CT 文件吗？此操作会同时删除关联掩码与标注。`)) return;
+  try{
+    const resp = await fetch(`/delete_ct_volumes/${encodeURIComponent(PRJ)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({volume_ids:selected})
+    });
+    const data = await resp.json();
+    if(!resp.ok || !data.success) throw new Error(data.error || '删除失败');
+    toast(`✓ 已删除 ${data.deleted} 个 CT 文件`);
+    setTimeout(()=>window.location.reload(), 600);
+  }catch(error){
+    toast(`❌ ${error.message}`);
+  }
+}
+
+function openCTImportDialog(){
+  document.getElementById('ct-import-input').click();
+}
+
+async function handleCTImportFiles(event){
+  const files = Array.from(event.target.files || []);
+  if(!files.length) return;
+  try{
+    toast('正在上传 CT 文件，请稍候...');
+    const uploadId = await uploadCTFiles(files);
+    const formData = new FormData();
+    formData.append('project_name', PRJ);
+    formData.append('upload_id', uploadId);
+    const resp = await fetch('/import_images', { method:'POST', body: formData });
+    const data = await resp.json();
+    if(!resp.ok || !data.success) throw new Error(data.error || '导入失败');
+    toast('✓ CT 文件导入成功');
+    setTimeout(()=>window.location.reload(), 800);
+  }catch(error){
+    toast(`❌ ${error.message}`);
+  }finally{
+    event.target.value = '';
+  }
+}
+
+async function uploadCTFiles(files){
+  const CHUNK_SIZE = 10 * 1024 * 1024;
+  const uploadId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  for(const file of files){
+    const fileId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    for(let i=0;i<totalChunks;i++){
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = file.slice(start, end);
+      const formData = new FormData();
+      formData.append('chunk', chunk, file.name);
+      formData.append('upload_id', uploadId);
+      formData.append('file_id', fileId);
+      formData.append('chunk_index', i);
+      formData.append('filename', file.name);
+      const resp = await fetch('/upload_chunk', { method:'POST', body: formData });
+      const data = await resp.json();
+      if(!resp.ok || !data.success) throw new Error(data.error || `上传分片失败: ${file.name}`);
+    }
+    const assemble = new FormData();
+    assemble.append('upload_id', uploadId);
+    assemble.append('file_id', fileId);
+    assemble.append('total_chunks', totalChunks);
+    assemble.append('filename', file.name);
+    const resp = await fetch('/assemble_file', { method:'POST', body: assemble });
+    const data = await resp.json();
+    if(!resp.ok || !data.success) throw new Error(data.error || `文件合并失败: ${file.name}`);
+  }
+  return uploadId;
+}
+
+function selVol(el, event){
+  if(event && event.target && event.target.closest('.ct-volume-checkbox')) return;
+  clearActiveAnnoSelection(true);
+  _lastManualMaskSlice = null;
+  _clearMedSAM2Prompt();
+  document.querySelectorAll('.vi').forEach(e=>e.classList.remove('sel'));
+  el.classList.add('sel');
+  const id=+el.dataset.id;
+  curMeta={sx:+el.dataset.sx,sy:+el.dataset.sy,sz:+el.dataset.sz,
+           spx:+el.dataset.spx,spy:+el.dataset.spy,spz:+el.dataset.spz,
+           name:el.dataset.name};
+  const fnameEl = document.getElementById('fname');
+  if(fnameEl){
+    fnameEl.textContent=curMeta.name;
+    fnameEl.title=curMeta.name;
+  }
+  const detCurrentId = document.getElementById('det-current-image-id');
+  if(detCurrentId){
+    detCurrentId.textContent = `当前图像：${curMeta.name}`;
+    detCurrentId.title = curMeta.name;
+  }
+  maxIdx={z:curMeta.sz-1,y:curMeta.sy-1,x:curMeta.sx-1};
+  idx={z:Math.floor(curMeta.sz/2),y:Math.floor(curMeta.sy/2),x:Math.floor(curMeta.sx/2)};
+  ['z','y','x'].forEach(a=>{
+    const sl=document.getElementById('sl-'+a);
+    sl.max=maxIdx[a]; sl.value=idx[a];
+    updSI(a);
+  });
+  imgCache={}; nCache={};
+  curId=id;
+  loadAll();
+  const np=el.dataset.nii||'';
+  if(!np) clrNii();
+  else if(np!==niiPath){clrNii();loadNiiMeta(np);}
+  else updDetectionInfo();
+  refreshCTVolumeStatus(el);
+}
+
+function setDetectionLoading(){
+  document.getElementById('det-count').textContent='检测数量：--';
+  document.getElementById('det-list').innerHTML='<div class="det-empty">正在读取检测结果...</div>';
+  document.getElementById('det-advice').textContent='正在分析当前体数据的类别检测信息。';
+  document.getElementById('det-badge').textContent='读取中';
+  document.getElementById('det-source').textContent=curMeta.name||'当前 CT 体数据';
+}
+
+let currentNodules = [];
+
+function updDetectionInfo(){
+  if(curId===null){
+    document.getElementById('det-count').textContent='检测数量：--';
+    document.getElementById('det-list').innerHTML='<div class="det-empty">暂无检测结果</div>';
+    document.getElementById('det-advice').textContent='加载体数据后展示类别检测信息与建议。';
+    document.getElementById('det-badge').textContent='待检测';
+    document.getElementById('det-source').textContent='请选择 CT 体数据';
+    document.getElementById('count-nodule').textContent = '0';
+    currentNodules = [];
+    updFollowupHistory();
+    return;
+  }
+  setDetectionLoading();
+  const qs = niiPath ? `?nii_path=${encodeURIComponent(niiPath)}` : '';
+  fetch(`/ct_detection_summary/${encodeURIComponent(PRJ)}/${curId}${qs}`)
+    .then(r=>r.json()).then(d=>{
+      if(!d.success) throw new Error(d.error||'读取失败');
+      document.getElementById('det-count').textContent=`检测数量：${d.count}`;
+      document.getElementById('det-badge').textContent=d.count>0?'已检测':'无结果';
+      document.getElementById('det-source').textContent=
+        d.source==='mask'?'来源：分割掩码连通域估算':'来源：标注文件空间位置去重';
+      const labels = d.labels || [];
+      currentNodules = (d.findings || []).map(n => ({...n, checked: false}));
+      
+      // 更新 Tab 计数标签
+      document.getElementById('count-nodule').textContent = currentNodules.length;
+      
+      // 重置筛选和排序选择框
+      const filterCondEl = document.getElementById('filter-cond');
+      const sortCondEl = document.getElementById('sort-cond');
+      if(filterCondEl) filterCondEl.value = 'all';
+      if(sortCondEl) sortCondEl.value = 'default';
+      
+      // 渲染列表
+      renderNoduleList(currentNodules);
+      
+      document.getElementById('det-advice').textContent=d.advice||'请结合临床情况由医生进一步确认。';
+      
+      // 刷新随访历史
+      updFollowupHistory();
+    }).catch(e=>{
+      document.getElementById('det-count').textContent='检测数量：--';
+      document.getElementById('det-list').innerHTML='<div class="det-empty">检测信息读取失败</div>';
+      document.getElementById('det-advice').textContent='获取诊断报告失败。';
+      document.getElementById('det-badge').textContent='异常';
+      document.getElementById('det-source').textContent=e.message||'读取失败';
+      document.getElementById('count-nodule').textContent = '0';
+      currentNodules = [];
+      updFollowupHistory();
+    });
+}
+
+function renderNoduleList(list) {
+  const container = document.getElementById('det-list');
+  if (!list || !list.length) {
+    container.innerHTML = '<div class="det-empty">暂无检测结果</div>';
+    document.getElementById('selected-count-label').textContent = '0/0';
+    return;
+  }
+
+  // 计算已选数量
+  const checked = list.filter(n => n.checked).length;
+  document.getElementById('selected-count-label').textContent = `${checked}/${list.length}`;
+  document.getElementById('det-select-all').checked = checked === list.length && list.length > 0;
+
+  // 25 项经典征象列表
+  const signOptions = [
+    '边界清但不光滑', '边缘模糊', '分叶', '浅分叶', '毛刺', '短毛刺', '空泡',
+    '厚壁空洞', '薄壁空洞', '支气管闭塞', '血管穿行', '胸膜牵拉', '胸膜凹陷',
+    '血管集束', '淋巴结肿大', '含钙化成分', '含脂肪成分', '血管贴边征', '桃尖征',
+    '棘状突起', '刀切征', '空气支气管征', '空气新月征', '反晕征', '卫星征'
+  ];
+
+  container.innerHTML = list.map((n, i) => {
+    const d = n.diameter_mm || 0;
+    const sizeStr = d > 0 ? `${Math.round(d)}x${Math.round(d)}mm` : '--';
+    // 估算球体体积：V = 4/3 * pi * r^3
+    const volStr = d > 0 ? `${Math.round((4/3) * Math.PI * Math.pow(d/2, 3))}mm³` : '--';
+
+    // 生成解剖部位下拉项
+    let locationOpts = '';
+    const segments = [
+      '右肺上叶尖段', '右肺上叶后段', '右肺上叶前段',
+      '右肺中叶外侧段', '右肺中叶内侧段',
+      '右肺下叶背段', '右肺下叶内基底段', '右肺下叶前基底段', '右肺下叶外基底段', '右肺下叶后基底段',
+      '左肺上叶尖后段', '左肺上叶前段', '左肺上叶舌叶上段', '左肺舌叶下段',
+      '左肺下叶背段', '左肺下叶内前基底段', '左肺下叶外基底段', '左肺下叶后基底段'
+    ];
+    if (n.position && !segments.includes(n.position)) {
+      segments.unshift(n.position);
+    }
+    segments.forEach(seg => {
+      locationOpts += `<option value="${seg}" ${n.position === seg ? 'selected' : ''}>${seg}</option>`;
+    });
+
+    // 活跃的已选征象标签
+    const currentSigns = n.signs ? n.signs.split(',').map(s => s.trim()).filter(s => s) : [];
+    const signsPills = currentSigns.map(s => `
+      <span class="sign-pill">
+        ${s} <span class="remove-sign" onclick="event.stopPropagation(); removeNoduleSign(${n.anno_id || 'null'}, ${i}, '${s}')">×</span>
+      </span>
+    `).join('');
+
+    // 多选下拉列表网格
+    const signsGrid = signOptions.map(opt => `
+      <label onclick="event.stopPropagation()">
+        <input type="checkbox" ${currentSigns.includes(opt) ? 'checked' : ''} 
+               onchange="onNoduleSignToggle(${n.anno_id || 'null'}, ${i}, '${opt}', this.checked)">
+        ${opt}
+      </label>
+    `).join('');
+
+    return `
+      <div class="nodule-item" id="nodule-row-${i}">
+        <div class="nodule-main">
+          <div class="nodule-meta">
+            <input type="checkbox" class="nodule-check" ${n.checked ? 'checked' : ''} 
+                   onchange="onNoduleCheckToggle(${i}, this.checked)">
+            <span class="nodule-idx">${i + 1}</span>
+            <span class="nodule-slice" onclick="event.stopPropagation(); goToSlice('z', ${n.slice_idx})" title="点击定位到 Z 轴第 ${n.slice_idx} 切片"><i class="fa-solid fa-location-crosshairs"></i> IM${n.slice_idx}</span>
+            <select class="nodule-location" onchange="updateNoduleField(${n.anno_id || 'null'}, ${i}, 'location', this.value)">
+              ${locationOpts}
+            </select>
+          </div>
+          <div class="nodule-size-info">
+            <span class="nodule-size">${sizeStr}</span>
+            <span class="nodule-volume">${volStr}</span>
+          </div>
+          <select class="nodule-texture" onchange="updateNoduleField(${n.anno_id || 'null'}, ${i}, 'texture', this.value)">
+            <option value="实性" ${n.texture === '实性' ? 'selected' : ''}>实性</option>
+            <option value="亚实性" ${n.texture === '亚实性' ? 'selected' : ''}>亚实性</option>
+            <option value="磨玻璃" ${n.texture === '磨玻璃' ? 'selected' : ''}>磨玻璃</option>
+            <option value="钙化" ${n.texture === '钙化' ? 'selected' : ''}>钙化</option>
+          </select>
+          <select class="nodule-risk" data-level="${n.risk_level || '低危'}" onchange="this.setAttribute('data-level', this.value); updateNoduleField(${n.anno_id || 'null'}, ${i}, 'risk_level', this.value)">
+            <option value="低危" ${n.risk_level === '低危' ? 'selected' : ''}>低危</option>
+            <option value="中危" ${n.risk_level === '中危' ? 'selected' : ''}>中危</option>
+            <option value="高危" ${n.risk_level === '高危' ? 'selected' : ''}>高危</option>
+          </select>
+        </div>
+        
+        <div class="nodule-signs-container">
+          <button class="add-sign-btn" onclick="event.stopPropagation(); toggleSignsDropdown(${i})">+添加征象</button>
+          <div class="signs-list">${signsPills}</div>
+          
+          <div class="signs-dropdown" id="signs-dropdown-${i}" style="display:none;" onclick="event.stopPropagation()">
+            <div class="signs-dropdown-header">
+              <span>选择征象特征</span>
+              <button class="signs-close" onclick="toggleSignsDropdown(${i})">确定</button>
+            </div>
+            <div class="signs-dropdown-grid">${signsGrid}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// 结节全选状态切换
+function toggleSelectAllNodules(el) {
+  const isChecked = el.checked;
+  currentNodules.forEach(n => n.checked = isChecked);
+  renderNoduleList(currentNodules);
+}
+
+// 单个结节复选框选择切换
+function onNoduleCheckToggle(idx, isChecked) {
+  currentNodules[idx].checked = isChecked;
+  const checked = currentNodules.filter(n => n.checked).length;
+  document.getElementById('selected-count-label').textContent = `${checked}/${currentNodules.length}`;
+  document.getElementById('det-select-all').checked = checked === currentNodules.length && currentNodules.length > 0;
+}
+
+// 打开/折叠征象多选气泡框
+function toggleSignsDropdown(idx) {
+  const el = document.getElementById(`signs-dropdown-${idx}`);
+  if (el) {
+    const isVisible = el.style.display === 'block';
+    document.querySelectorAll('.signs-dropdown').forEach(dropdown => dropdown.style.display = 'none');
+    el.style.display = isVisible ? 'none' : 'block';
+  }
+}
+
+// 征象复选框触发值更新
+function onNoduleSignToggle(annoId, idx, signText, isChecked) {
+  const n = currentNodules[idx];
+  let currentSigns = n.signs ? n.signs.split(',').map(s => s.trim()).filter(s => s) : [];
+  if (isChecked) {
+    if (!currentSigns.includes(signText)) currentSigns.push(signText);
+  } else {
+    currentSigns = currentSigns.filter(s => s !== signText);
+  }
+  const signsStr = currentSigns.join(',');
+  n.signs = signsStr;
+  
+  renderNoduleList(currentNodules);
+  document.getElementById(`signs-dropdown-${idx}`).style.display = 'block';
+
+  saveNoduleFieldChange(annoId, { signs: signsStr });
+}
+
+// 点击征象药丸的 × 快速移出
+function removeNoduleSign(annoId, idx, signText) {
+  const n = currentNodules[idx];
+  let currentSigns = n.signs ? n.signs.split(',').map(s => s.trim()).filter(s => s) : [];
+  currentSigns = currentSigns.filter(s => s !== signText);
+  const signsStr = currentSigns.join(',');
+  n.signs = signsStr;
+
+  renderNoduleList(currentNodules);
+  saveNoduleFieldChange(annoId, { signs: signsStr });
+}
+
+// 下拉项字段修改回调（解剖部位，实质性，危险程度）
+function updateNoduleField(annoId, idx, fieldName, value) {
+  currentNodules[idx][fieldName] = value;
+  const payload = {};
+  payload[fieldName] = value;
+  saveNoduleFieldChange(annoId, payload);
+}
+
+// 通过 Ajax 异步更新到后端 config.db 数据库
+function saveNoduleFieldChange(annoId, fieldUpdate) {
+  if (!annoId) return; // 估计的 Mask 未写入数据库时不发起调用
+  const n = currentNodules.find(item => item.anno_id === annoId);
+  if (!n) return;
+
+  fetch('/update_ct_annotation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      project_name: PRJ,
+      anno_id: annoId,
+      location: n.position || '',
+      texture: n.texture || '',
+      risk_level: n.risk_level || '',
+      signs: n.signs || ''
+    })
+  }).then(r => r.json()).then(res => {
+    if (!res.success) {
+      toast('保存失败: ' + res.error);
+    }
+  }).catch(err => {
+    console.error('Save nodule change failed:', err);
+  });
+}
+
+// 前端筛选逻辑
+function filterNodules() {
+  const cond = document.getElementById('filter-cond').value;
+  let filtered = [...currentNodules];
+  
+  if (cond !== 'all') {
+    if (['低危', '中危', '高危'].includes(cond)) {
+      filtered = filtered.filter(n => n.risk_level === cond);
+    } else if (cond === '实性') {
+      filtered = filtered.filter(n => n.texture === '实性');
+    } else if (cond === '磨玻璃') {
+      filtered = filtered.filter(n => n.texture === '磨玻璃');
+    }
+  }
+  
+  const sorted = sortNoduleList(filtered);
+  renderNoduleList(sorted);
+}
+
+// 前端排序逻辑
+function sortNodules() {
+  filterNodules();
+}
+
+function sortNoduleList(list) {
+  const cond = document.getElementById('sort-cond').value;
+  const sorted = [...list];
+  if (cond === 'size-desc') {
+    sorted.sort((a, b) => (b.diameter_mm || 0) - (a.diameter_mm || 0));
+  } else if (cond === 'size-asc') {
+    sorted.sort((a, b) => (a.diameter_mm || 0) - (b.diameter_mm || 0));
+  } else if (cond === 'slice-asc') {
+    sorted.sort((a, b) => (a.slice_idx || 0) - (b.slice_idx || 0));
+  }
+  return sorted;
+}
+
+// 注册全局文档点击自动收起多选框
+document.addEventListener('click', () => {
+  document.querySelectorAll('.signs-dropdown').forEach(dropdown => dropdown.style.display = 'none');
+});
+
+// 防止在右侧信息栏滑动时导致三视图图像切片随之滚动
+const infoPanel = document.getElementById('p-info');
+if (infoPanel) {
+  infoPanel.addEventListener('wheel', (e) => {
+    e.stopPropagation();
+  }, { passive: true });
+}
+
+// 跳转到切片位置
+function goToSlice(ax, newIdx) {
+  if (newIdx >= 0 && newIdx <= maxIdx[ax]) {
+    clearActiveAnnoSelection(true);
+    idx[ax] = newIdx;
+    const slider = document.getElementById('sl-' + ax);
+    if (slider) slider.value = newIdx;
+    updSI(ax);
+    loadSlice(ax);
+  }
+}
+
+// 切换右下角诊断与随访 Tabs
+function switchRightTab(tabName) {
+  const isReport = tabName === 'report';
+  
+  // 更新按钮样式
+  const btnReport = document.getElementById('tab-report');
+  const btnFollowup = document.getElementById('tab-followup');
+  if (btnReport && btnFollowup) {
+    btnReport.style.color = isReport ? '#2563eb' : '#64748b';
+    btnReport.style.borderBottomColor = isReport ? '#2563eb' : 'transparent';
+    
+    btnFollowup.style.color = !isReport ? '#2563eb' : '#64748b';
+    btnFollowup.style.borderBottomColor = !isReport ? '#2563eb' : 'transparent';
+  }
+
+  // 切换内容区域可见性
+  const divReport = document.getElementById('content-report');
+  const divFollowup = document.getElementById('content-followup');
+  if (divReport && divFollowup) {
+    divReport.style.display = isReport ? 'block' : 'none';
+    divFollowup.style.display = !isReport ? 'block' : 'none';
+  }
+}
+
+// 复制右下角诊断意见文本到系统剪贴板
+function copyReportText() {
+  const text = document.getElementById('det-advice').textContent.trim();
+  navigator.clipboard.writeText(text).then(() => {
+    toast('诊断报告已成功复制到剪贴板！');
+  }).catch(() => {
+    // 兼容性复制方案
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    toast('诊断报告已成功复制到剪贴板！');
+  });
+}
+
+// 拉取当前患者的随访历史记录并渲染
+function updFollowupHistory() {
+  if (curId === null) {
+    document.getElementById('left-followup-list').innerHTML = 
+      '<div style="color: #94a3b8; text-align: center; padding-top: 20px;">加载当前 CT 后，自动关联同名患者的历史诊断。</div>';
+    document.getElementById('followup-title').textContent = '患者随访历史';
+    return;
+  }
+  
+  fetch(`/ct_followup_history/${encodeURIComponent(PRJ)}/${curId}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) throw new Error(d.error || '获取随访记录失败');
+      
+      document.getElementById('followup-title').textContent = `患者随访历史 (${d.patient_id})`;
+      const listContainer = document.getElementById('left-followup-list');
+      
+      if (!d.history || !d.history.length) {
+        listContainer.innerHTML = `
+          <div style="color: #64748b; text-align: center; padding-top: 20px;">
+            未找到该患者的其他历史扫描记录。<br>
+            <span style="font-size: 10px; color: #94a3b8;">（系统通过编号规则识别同人：${d.patient_id}）</span>
+          </div>`;
+        return;
+      }
+      
+      listContainer.innerHTML = d.history.map(h => `
+        <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; background: #ffffff; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.02); margin-bottom: 4px;">
+          <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 11px; color: #1e293b; margin-bottom: 4px;">
+            <span style="color: #2563eb; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 150px; cursor: pointer;" 
+                  title="点击切换到该历史影像" onclick="loadHistoryVolume(${h.volume_id})">
+              📁 ${h.name}
+            </span>
+            <span style="color: #64748b; font-size: 10px;">${h.added_at.split(' ')[0]}</span>
+          </div>
+          <div style="font-size: 10px; color: #475569; line-height: 1.4;">
+            <strong>结节数量：</strong>${h.nodules_count} 个 | <strong>最大直径：</strong>${h.max_diameter} mm
+          </div>
+          <div style="font-size: 10px; color: #64748b; margin-top: 4px; background: #f8fafc; padding: 4px 6px; border-radius: 4px; border-left: 2px solid #3b82f6;">
+            ${h.summary}
+          </div>
+        </div>
+      `).join('');
+    })
+    .catch(err => {
+      console.error(err);
+      document.getElementById('left-followup-list').innerHTML = 
+        '<div style="color: #ef4444; text-align: center; padding-top: 20px;">获取随访历史记录失败。</div>';
+    });
+}
+
+// 快速跳转至同人历史任务
+function loadHistoryVolume(volumeId) {
+  const viEl = document.querySelector(`.vi[data-id="${volumeId}"]`);
+  if (viEl) {
+    viEl.click();
+  } else {
+    toast("无法在当前列表找到该历史影像文件");
+  }
+}
+
+// ========== MedSAM2 自动分割 ==========
+let _medsam2TaskId = null;
+let _medsam2PollTimer = null;
+let _medsam2PickMode = false;
+let _medsam2PromptPoint = null;
+let _lastManualMaskSlice = null;
+
+function _renderMedSAM2PromptState(){
+  const txt = document.getElementById('medsam2-prompt-txt');
+  const dot = document.getElementById('medsam2-prompt-dot');
+  const btn = document.getElementById('btn-medsam2');
+  if(!txt || !dot || !btn) return;
+  if(_lastManualMaskSlice && _lastManualMaskSlice.volumeId === curId && _lastManualMaskSlice.axis === 'z'){
+    txt.textContent = `已检测到轴状面第 ${_lastManualMaskSlice.sliceIdx} 层手工粗标`;
+    dot.style.background = '#22c55e';
+  } else {
+    txt.textContent = '请先在轴状面手工粗标病灶';
+    dot.style.background = '#94a3b8';
+  }
+  btn.textContent = 'AI预标注器';
+  btn.title = '先在轴状面手工粗标病灶，再点击执行三维 AI 补全';
+}
+
+function _clearMedSAM2Prompt(){
+  _medsam2PromptPoint = null;
+  _medsam2PickMode = false;
+  _renderMedSAM2PromptState();
+}
+
+function _getCurrentVolumeMaskPath(){
+  if(curId===null) return '';
+  const el = document.querySelector(`.vi[data-id="${curId}"]`);
+  return el ? String(el.dataset.nii || '').trim() : '';
+}
+
+function _rememberManualMaskSlice(axis, sliceIdx){
+  _lastManualMaskSlice = {
+    volumeId: curId,
+    axis,
+    sliceIdx: +sliceIdx,
+    at: Date.now(),
+  };
+  _renderMedSAM2PromptState();
+}
+
+function _setMedSAM2Prompt(axis, voxel){
+  if(!voxel) return false;
+  _medsam2PromptPoint = {
+    volumeId: curId,
+    axis,
+    vx: Math.max(0, Math.round(voxel.vx)),
+    vy: Math.max(0, Math.round(voxel.vy)),
+    vz: Math.max(0, Math.round(voxel.vz)),
+    label: 1,
+  };
+  _medsam2PickMode = false;
+  _renderMedSAM2PromptState();
+  return true;
+}
+
+function _getMedSAM2PointPrompt(){
+  if(activeAnno && activeAnno.seedVoxel){
+    return [[
+      Math.max(0, Math.round(activeAnno.seedVoxel.vx)),
+      Math.max(0, Math.round(activeAnno.seedVoxel.vy)),
+      Math.max(0, Math.round(activeAnno.seedVoxel.vz)),
+      1
+    ]];
+  }
+  if(_medsam2PromptPoint && _medsam2PromptPoint.volumeId === curId){
+    return [[
+      _medsam2PromptPoint.vx,
+      _medsam2PromptPoint.vy,
+      _medsam2PromptPoint.vz,
+      1
+    ]];
+  }
+  return [];
+}
+
+function _beginMedSAM2PickMode(){
+  toast('请先在轴状面手工粗标病灶，再点击 AI 预标注器');
+}
+
+function _submitMedSAM2Task(payload){
+  const btn = document.getElementById('btn-medsam2');
+  btn.disabled = true;
+  btn.textContent = '推理中...';
+  document.getElementById('medsam2-prog-wrap').style.display = 'block';
+  document.getElementById('medsam2-prog-bar').style.width = '5%';
+  document.getElementById('medsam2-prog-txt').textContent = '正在提交推理任务...';
+
+  fetch(`/medsam2/segment/${PRJ}/${curId}`, {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload || {})
+  }).then(r=>r.json()).then(d=>{
+    if(d.success){
+      _medsam2TaskId = d.task_id;
+      document.getElementById('medsam2-prog-txt').textContent = '推理进行中，请稍候...';
+      _pollMedSAM2Progress();
+    } else if(!d.available){
+      toast('⚠️ '+d.message);
+      _resetMedSAM2UI();
+    } else {
+      toast('❌ 推理失败: '+(d.message||'未知错误'));
+      _resetMedSAM2UI();
+    }
+  }).catch(e=>{toast('❌ 请求失败: '+e); _resetMedSAM2UI();});
+}
+
+async function _hasCurrentAxialManualMask(){
+  const currentMaskPath = _getCurrentVolumeMaskPath();
+  if(!currentMaskPath || curId===null) return false;
+  if(!_lastManualMaskSlice || _lastManualMaskSlice.volumeId !== curId || _lastManualMaskSlice.axis !== 'z'){
+    return false;
+  }
+  try {
+    const resp = await fetch(`/nii_mask_slices?path=${encodeURIComponent(currentMaskPath)}`);
+    const data = await resp.json();
+    if(!resp.ok || !data.success) return false;
+    const zSlices = Array.isArray(data.z) ? data.z.map(v => +v) : [];
+    return zSlices.includes(+_lastManualMaskSlice.sliceIdx);
+  } catch (_) {
+    return false;
+  }
+}
+
+function _buildMedSAM2MaskPromptPayload(){
+  const currentMaskPath = _getCurrentVolumeMaskPath();
+  return {
+    prompt_mask_path: currentMaskPath,
+    prompt_mask_axis: 'z',
+    prompt_mask_slice_idx: _lastManualMaskSlice ? _lastManualMaskSlice.sliceIdx : idx.z,
+    label_value: activeCTClassValue || 1,
+  };
+}
+
+function checkMedSAM2Status(){
+  if(!document.getElementById('medsam2-status-txt')) return;
+  fetch('/medsam2/status').then(r=>r.json()).then(d=>{
+    const dot = document.getElementById('medsam2-dot');
+    const txt = document.getElementById('medsam2-status-txt');
+    const btn = document.getElementById('btn-medsam2');
+    if(d.available){
+      dot.style.background = '#22c55e';
+      txt.textContent = '服务就绪';
+      btn.disabled = false;
+      btn.style.background = 'linear-gradient(135deg,#1d4ed8,#7c3aed)';
+      btn.style.color = '#fff';
+      btn.style.cursor = 'pointer';
+      btn.style.borderColor = '#2563eb';
+      btn.title = '点击对当前体数据进行自动检测与分割';
+      _renderMedSAM2PromptState();
+    } else {
+      dot.style.background = '#f59e0b';
+      txt.textContent = '未部署';
+      btn.title = d.message || 'MedSAM2 模型尚未部署，接口已预留';
+    }
+  }).catch(()=>{
+    document.getElementById('medsam2-status-txt').textContent = '无法连接';
+  });
+}
+
+function triggerMedSAM2(){
+  if(!curId){toast('❌ 请先选择体数据');return;}
+  if(_medsam2TaskId){ toast('任务正在运行中，请稍候'); return; }
+  const currentMaskPath = _getCurrentVolumeMaskPath();
+  if(!currentMaskPath){
+    toast('❌ 请先为当前 CT 体数据初始化掩码，并在轴状面手工粗标病灶');
+    return;
+  }
+  if(niiPath && String(niiPath).trim() !== currentMaskPath){
+    toast('⚠ 当前显示的掩码与该 CT 体数据绑定的掩码不一致，AI 预标注将使用当前体数据自己的掩码');
+  }
+  _hasCurrentAxialManualMask().then(hasMask=>{
+    if(!hasMask){
+      toast('⚠ 还没有检测到当前 CT 体数据轴状面的手工粗标，请先在轴状面画出病灶后再执行 AI 标注');
+      return;
+    }
+    _submitMedSAM2Task(_buildMedSAM2MaskPromptPayload());
+  });
+}
+
+function _pollMedSAM2Progress(){
+  if(!_medsam2TaskId) return;
+  clearTimeout(_medsam2PollTimer);
+  _medsam2PollTimer = setTimeout(()=>{
+    fetch(`/medsam2/segment_status/${_medsam2TaskId}`).then(r=>r.json()).then(d=>{
+      const bar = document.getElementById('medsam2-prog-bar');
+      const txt = document.getElementById('medsam2-prog-txt');
+      bar.style.width = (d.progress||10)+'%';
+      txt.textContent = `推理中 ${d.progress||0}%`;
+      if(d.status === 'done'){
+        bar.style.width = '100%';
+        txt.textContent = '推理完成！正在加载掩码...';
+        _medsam2TaskId = null;
+        // 自动加载生成的掩码文件
+        if(d.nii_path) setTimeout(()=>{ loadNiiMeta(d.nii_path); _resetMedSAM2UI(); }, 1000);
+      } else if(d.status === 'error'){
+        toast('❌ 推理失败: '+(d.message||'请重新点击更准确的病灶中心'));
+        _resetMedSAM2UI();
+      } else {
+        _pollMedSAM2Progress(); // 继续轮询
+      }
+    }).catch(()=>_pollMedSAM2Progress());
+  }, 2000);
+}
+
+function _resetMedSAM2UI(){
+  const btn = document.getElementById('btn-medsam2');
+  btn.disabled = false;
+  document.getElementById('medsam2-prog-wrap').style.display = 'none';
+  _medsam2TaskId = null;
+  clearTimeout(_medsam2PollTimer);
+  _medsam2PickMode = false;
+  _renderMedSAM2PromptState();
+}
+
+function updSI(a){document.getElementById('si-'+a).textContent=`${idx[a]}/${maxIdx[a]}`;}
+
+function preset(w,c){document.getElementById('ww').value=w;document.getElementById('wc').value=c;reloadAll();}
+function reloadAll(){ww=+document.getElementById('ww').value;wc=+document.getElementById('wc').value;imgCache={};nCache={};loadAll();}
+function loadAll(){['z','y','x'].forEach(a=>loadSlice(a));}
+
+function loadSlice(a){
+  if(curId===null)return;
+  const key=`${curId}_${a}_${idx[a]}_${ww}_${wc}`;
+  if(maximizedPanel && {axial:'z',sagittal:'x',coronal:'y'}[maximizedPanel] === a){
+    clearActiveAnnoSelection(true);
+  }
+  if(imgCache[key]){drawSlice(a,imgCache[key]);if(niiVis&&niiPath)loadNiiSlice(a);return;}
+  showLd(a,true);
+  const url=`/ct_slice/${PRJ}/${curId}?axis=${a}&index=${idx[a]}&ww=${ww}&wc=${wc}&_t=${Date.now()}`;
+  const im=new Image();
+  im.onload=()=>{showLd(a,false);const ks=Object.keys(imgCache);if(ks.length>120)delete imgCache[ks[0]];imgCache[key]=im;drawSlice(a,im);if(niiVis&&niiPath)loadNiiSlice(a);};
+  im.onerror=()=>{showLd(a,false);toast('❌ 切片加载失败 '+a.toUpperCase());};
+  im.src=url;
+}
+
+function drawSlice(a,img){
+  const cvs=document.getElementById('c-'+axName(a));
+  const panel=document.getElementById('p-'+axName(a));
+  if(!cvs||!panel)return;
+  const pw=panel.clientWidth, ph=panel.clientHeight;
+  const scale=Math.min(pw/img.naturalWidth,ph/img.naturalHeight)*0.98;
+  cvs.width=Math.round(img.naturalWidth*scale);
+  cvs.height=Math.round(img.naturalHeight*scale);
+  const ctx=cvs.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(img,0,0,cvs.width,cvs.height);
+  cvs._scale=scale;
+  syncOv(a);
+  document.getElementById('hud-'+axName(a)).textContent=`${axName(a).toUpperCase()} ${idx[a]}/${maxIdx[a]}`;
+}
+
+function axName(a){return{z:'axial',x:'sagittal',y:'coronal'}[a]||a;}
+
+function syncOv(a){
+  const cv=document.getElementById('c-'+axName(a));
+  const ov=document.getElementById('ov-'+axName(a));
+  if(!cv||!ov)return;
+  ov.width=cv.width;ov.height=cv.height;
+}
+
+function showLd(a,v){const el=document.getElementById('ld-'+axName(a));if(el)el.classList.toggle('show',v);}
+
+// NIfTI
+function onDrop(e){e.preventDefault();e.currentTarget.style.borderColor='';const f=e.dataTransfer.files[0];if(f)askPath(f.name);}
+function onNF(inp){if(inp.files[0])askPath(inp.files[0].name);}
+function askPath(n){const p=prompt('输入服务器端完整路径：',n);if(p)loadNiiMeta(p.trim());}
+function loadNiiMeta(p){
+  fetch(`/nii_meta?path=${encodeURIComponent(p)}`).then(r=>r.json()).then(d=>{
+    if(!d.success){toast('掩码加载失败:'+d.error);return;}
+    niiPath=p;niiVis=true;nCache={};
+    const nfn=document.getElementById('nfn');
+    if(nfn) nfn.textContent=p.split(/[\\/]/).pop();
+    document.getElementById('ntb').textContent='隐藏掩码';
+    document.getElementById('ntb').classList.remove('off');
+    const leg=document.getElementById('nleg');
+    leg.innerHTML = CT_CLASSES.map(c => `<div class="lc"><div class="ls" style="background:${c.color}"></div>${c.name} (#${c.value})</div>`).join('');
+    if(curId!==null)loadAll();
+    loadMaskSlices(p);
+    updDetectionInfo();
+    toast('分割掩码已加载');
+  }).catch(e=>toast('请求失败:'+e));
+}
+function loadNiiSlice(a){
+  if(!niiPath||!niiVis)return;
+  const ov=document.getElementById('ov-'+axName(a));
+  const cv=document.getElementById('c-'+axName(a));
+  if(!ov||!cv||cv.width===0)return;
+  const spx=curMeta.spx,spy=curMeta.spy,spz=curMeta.spz;
+
+  const key=`${niiPath}_${a}_${idx[a]}_${nAlpha}`;
+  if(nCache[key]){
+     drawOv(a,nCache[key]);
+  } else {
+     const url=`/nii_mask_slice?path=${encodeURIComponent(niiPath)}&axis=${a}&index=${idx[a]}&sx=${spx}&sy=${spy}&sz=${spz}&alpha=${nAlpha}&_t=${Date.now()}`;
+     const im=new Image();
+     im.onload=()=>{
+        const ks=Object.keys(nCache);
+        if(ks.length>80)delete nCache[ks[0]];
+        nCache[key]=im;
+        drawOv(a,im);
+     };
+     im.src=url;
+  }
+}
+function drawOv(a,img){
+  const ov=document.getElementById('ov-'+axName(a));
+  const cv=document.getElementById('c-'+axName(a));
+  if(!ov||!cv)return;
+  const ctx=ov.getContext('2d');
+  ctx.clearRect(0,0,ov.width,ov.height);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(img,0,0,ov.width,ov.height);
+}
+function togNii(){
+  niiVis=!niiVis;
+  const b=document.getElementById('ntb');
+  b.textContent=niiVis?'隐藏掩码':'显示掩码';
+  if(b.classList) b.classList.toggle('off',!niiVis);
+  if(niiVis) {
+     loadAll();
+  } else {
+     ['z','y','x'].forEach(a=>{
+        const ov=document.getElementById('ov-'+axName(a));
+        if(ov)ov.getContext('2d').clearRect(0,0,ov.width,ov.height);
+     });
+  }
+}
+function clrNii(){
+  clearActiveAnnoSelection(true);
+  niiPath=null;
+  nCache={};
+  maskSlices={z:[],y:[],x:[]};
+  maskSliceLabels={z:{},y:{},x:{}};
+  const nfn=document.getElementById('nfn');
+  if(nfn) nfn.textContent='未加载掩码';
+  document.getElementById('nleg').innerHTML='';
+  document.getElementById('nf').value='';
+  ['z','y','x'].forEach(a=>{
+     const ov=document.getElementById('ov-'+axName(a));
+     if(ov)ov.getContext('2d').clearRect(0,0,ov.width,ov.height);
+     clearMarks(a);
+  });
+  updDetectionInfo();
+}
+
+function getCTMaskStatusText(el){
+  if(!el) return '未初始化掩码';
+  const hasMask = !!String(el.dataset.nii || '').trim();
+  const hasCsv = !!String(el.dataset.csv || '').trim() && el.dataset.csv !== 'None';
+  if(hasMask && hasCsv) return '已生成掩码（来源：CSV）';
+  if(hasMask) return '已有关联掩码';
+  if(hasCsv) return '待自动生成掩码（CSV）';
+  return '待自动生成空白掩码';
+}
+
+function refreshCTVolumeStatus(el){
+  if(!el) return;
+  const statusEl = el.querySelector('.vv');
+  if(statusEl) statusEl.textContent = getCTMaskStatusText(el);
+}
+
+function initBlankMask(){
+  if(curId===null){toast('请先选择一个 CT 体数据');return;}
+  const currentVol = document.querySelector(`.vi[data-id="${curId}"]`);
+  const hasExistingMask = !!(currentVol && currentVol.dataset.nii);
+  if(hasExistingMask){
+    toast('当前已存在掩码标注，系统不会重复初始化，请直接继续编辑');
+    return;
+  }
+  const hasCsv = !!(currentVol && currentVol.dataset.csv && currentVol.dataset.csv !== 'None');
+  const action = hasCsv ? 'create_from_csv' : 'create_blank';
+  toast(hasCsv ? '正在根据 CSV 自动生成初始掩码...' : '正在自动创建空白掩码...');
+  fetch(`/init_nii_mask/${encodeURIComponent(PRJ)}/${curId}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action})
+  })
+    .then(r=>r.json()).then(d=>{
+      if(d.success){
+         toast('✓ ' + d.message);
+         const el = document.querySelector(`.vi[data-id="${curId}"]`);
+         if(el){
+             el.dataset.nii = d.nii_path;
+             refreshCTVolumeStatus(el);
+             selVol(el);
+         }
+      } else {
+         toast('❌ 转换失败: ' + d.error);
+      }
+    }).catch(e=>toast('网络错误: '+e));
+}
+
+// ========== Mask slice markers on progress bars ==========
+let maskSlices={z:[],y:[],x:[]};
+let maskSliceLabels={z:{},y:{},x:{}};
+
+function loadMaskSlices(p){
+  fetch(`/nii_mask_slices?path=${encodeURIComponent(p)}`).then(r=>r.json()).then(d=>{
+    if(!d.success)return;
+    maskSlices={z:d.z||[],y:d.y||[],x:d.x||[]};
+    maskSliceLabels={
+      z:d.z_marks||{},
+      y:d.y_marks||{},
+      x:d.x_marks||{},
+    };
+    ['z','y','x'].forEach(a=>renderMarks(a));
+  }).catch(()=>{});
+}
+
+function renderMarks(a){
+  const cont=document.getElementById('mm-'+a);
+  if(!cont)return;
+  cont.innerHTML='';
+  const slices=maskSlices[a];
+  const total=maxIdx[a];
+  if(!slices.length||!total)return;
+  slices.forEach(i=>{
+    const pct=(i/total)*100;
+    const mk=document.createElement('div');
+    mk.className='mask-mark';
+    mk.style.left=pct+'%';
+    const labels = (((maskSliceLabels[a] || {})[i]) || []).map(v => +v).filter(v => v > 0);
+    const meta = labels.length ? getCTClassMeta(labels[0]) : null;
+    mk.style.background = meta ? meta.color : '#ff6432';
+    mk.title=`切片 ${i} 含掩码`;
+    mk.onclick=(e)=>{e.stopPropagation();idx[a]=i;document.getElementById('sl-'+a).value=i;updSI(a);loadSlice(a);};
+    mk.style.cursor='pointer';
+    cont.appendChild(mk);
+  });
+}
+
+function clearMarks(a){const c=document.getElementById('mm-'+a);if(c)c.innerHTML='';}
+
+function _syncSliderRowVisibility(){
+  const row = document.getElementById('ct-slider-row');
+  if(!row) return;
+  const panelAxisMap = {axial:'z', sagittal:'x', coronal:'y'};
+  const activeAxis = maximizedPanel ? panelAxisMap[maximizedPanel] : null;
+  row.classList.toggle('single-axis', !!activeAxis);
+  document.querySelectorAll('[data-axis-row]').forEach(el=>{
+    const axis = el.getAttribute('data-axis-row');
+    el.classList.toggle('active', !activeAxis || axis === activeAxis);
+    el.classList.toggle('hidden', !!activeAxis && axis !== activeAxis);
+  });
+}
+
+// ========== Panel maximize + floating toolbar ==========
+let maximizedPanel = null;
+let _ctZoomScale = 1.0;
+
+function onPanelClick(pn, e){
+  if(e.target.closest('#ct-toolbar')) return;
+  if(e.target.closest('#p-info')) return;
+  if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  
+  // Only maximize if not already maximized.
+  if(maximizedPanel !== pn){
+    maximizePanelView(pn);
+  }
+}
+
+function maximizePanelView(pn){
+  cancelPolygon();
+  _painting=false;
+  _strokePts=[];
+  _strokePts=[];
+  _lastStrokeCanvasPt=null;
+  ['axial','sagittal','coronal'].forEach(p=>{
+    const el=document.getElementById('p-'+p);
+    if(p===pn){ el.classList.add('maximized'); }
+    else { el.classList.add('hidden-panel'); }
+  });
+  const pInfo = document.getElementById('p-info');
+  pInfo.classList.remove('hidden-panel');
+  const mp=document.getElementById('p-'+pn);
+  mp.appendChild(pInfo);
+  maximizedPanel=pn;
+  // Show floating toolbar inside the maximized panel
+  const tb=document.getElementById('ct-toolbar');
+  mp.appendChild(tb);
+  tb.style.display='flex';
+  const maskPanel=document.getElementById('ct-mask-panel');
+  mp.appendChild(maskPanel);
+  maskPanel.style.display='block';
+  // Remove expand-hint, add restore btn
+  const eh=mp.querySelector('.expand-hint'); if(eh) eh.style.display='none';
+  const ax={axial:'z',sagittal:'x',coronal:'y'}[pn];
+  setTimeout(()=>{ 
+    _ctZoomScale=1; _ctPanX=0; _ctPanY=0;
+    _updateTransform();
+    imgCache={}; loadSlice(ax); 
+  }, 50);
+  _syncSliderRowVisibility();
+  _renderMedSAM2PromptState();
+}
+
+function stepSlice(dir){
+  if(!maximizedPanel) return;
+  const ax={axial:'z',sagittal:'x',coronal:'y'}[maximizedPanel];
+  const newIdx=idx[ax]+dir;
+  if(newIdx>=0 && newIdx<=maxIdx[ax]){
+    clearActiveAnnoSelection(true);
+    idx[ax]=newIdx;
+    document.getElementById('sl-'+ax).value=newIdx;
+    updSI(ax);
+    loadSlice(ax);
+  }
+}
+
+function restorePanels(){
+  setCTTool('select');
+  cancelPolygon();
+  clearActiveAnnoSelection(true);
+  ['axial','sagittal','coronal'].forEach(p=>{
+    const el=document.getElementById('p-'+p);
+    el.classList.remove('maximized','hidden-panel');
+    const eh=el.querySelector('.expand-hint'); if(eh) eh.style.display='';
+    
+    // reset transforms
+    ['c-','ov-'].forEach(prefix=>{
+      const c=document.getElementById(prefix+p);
+      if(c) c.style.transform = '';
+    });
+  });
+  // Move info panel back to panels container
+  const pInfo = document.getElementById('p-info');
+  document.getElementById('panels').appendChild(pInfo);
+  pInfo.classList.remove('hidden-panel');
+  // Move toolbar back to panels container
+  const tb=document.getElementById('ct-toolbar');
+  document.getElementById('panels').appendChild(tb);
+  tb.style.display='none';
+  const maskPanel=document.getElementById('ct-mask-panel');
+  document.getElementById('panels').appendChild(maskPanel);
+  maskPanel.style.display='none';
+  maximizedPanel=null;
+  _ctZoomScale=1;
+  _syncSliderRowVisibility();
+  setTimeout(()=>{ imgCache={}; loadAll(); }, 50);
+  _renderMedSAM2PromptState();
+}
+
+// ========== CT Tool state ==========
+
+function setCTTool(t){
+  ctTool=t;
+  if(['brush','eraser'].includes(t)){
+    vectorAnnos.forEach(a => a.selected = false);
+    activeAnno = null;
+    _activeAnnoDirty = false;
+    _drawPolyPreview();
+  }
+  if(!['brush','eraser'].includes(t)){
+    _painting=false;
+    _strokePts=[];
+    _lastStrokeCanvasPt=null;
+  }
+  ['brush','eraser','select'].forEach(n=>{
+    const b=document.getElementById('ctb-'+n);
+    if(b) b.classList.toggle('active',n===t);
+  });
+  cancelPolygon();
+}
+
+// ========== Polygon annotation & Vector Layer ==========
+let _polyPts=[];    // [{cx,cy}] canvas coords
+let _polyAxis=null;
+let _polySlice=null;
+
+// Vector Layer for editable polygons before saving
+let vectorAnnos = []; // [{id, axis, slice, pts:[{cx,cy}], label, cw, ch, selected, targetLayer}]
+let activeAnno = null;
+let _isDraggingAnno = false;
+let _annoDragStartX = 0, _annoDragStartY = 0;
+let _annoDragOriginX = 0, _annoDragOriginY = 0;
+let _isRotatingAnno = false;
+let _annoRotationStartAngle = 0;
+let _activeAnnoDirty = false;
+let _activeAnnoUndoPts = null;
+
+function _getAnnoColorMeta(anno){
+  const meta = getCTClassMeta(anno && anno.label);
+  const rgb = _hexToRgb(meta.color);
+  return { meta, rgb };
+}
+
+function _getPixelAt(imageData, x, y){
+  if(!imageData) return null;
+  const px = Math.max(0, Math.min(imageData.width - 1, Math.round(x)));
+  const py = Math.max(0, Math.min(imageData.height - 1, Math.round(y)));
+  const idx = (py * imageData.width + px) * 4;
+  return {
+    x: px,
+    y: py,
+    r: imageData.data[idx],
+    g: imageData.data[idx + 1],
+    b: imageData.data[idx + 2],
+    a: imageData.data[idx + 3],
+  };
+}
+
+function _matchClassByColor(r, g, b){
+  let best = getCTClassMeta(activeCTClassValue);
+  let bestDist = Infinity;
+  CT_CLASSES.forEach(c => {
+    const rgb = _hexToRgb(c.color);
+    const dist = Math.hypot(r - rgb.r, g - rgb.g, b - rgb.b);
+    if(dist < bestDist){
+      best = c;
+      bestDist = dist;
+    }
+  });
+  return bestDist <= 80 ? best : null;
+}
+
+function _pointInPolygon(pt, pts){
+  let inside = false;
+  for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){
+    const xi = pts[i].cx, yi = pts[i].cy;
+    const xj = pts[j].cx, yj = pts[j].cy;
+    const intersects = ((yi > pt.cy) !== (yj > pt.cy)) &&
+      (pt.cx < ((xj - xi) * (pt.cy - yi)) / ((yj - yi) || 1e-6) + xi);
+    if(intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function _getAnnoControlHandle(anno){
+  const box = getAnnoBoundingBox(anno);
+  return { cx: box.maxX, cy: box.maxY, r: 9, box };
+}
+
+function _cloneAnnoPoints(pts){
+  return pts.map(p => ({cx: p.cx, cy: p.cy}));
+}
+
+function _transformPointAround(point, center, scaleFactor, cos, sin){
+  const dx = (point.cx - center.cx) * scaleFactor;
+  const dy = (point.cy - center.cy) * scaleFactor;
+  point.cx = center.cx + (dx * cos - dy * sin);
+  point.cy = center.cy + (dx * sin + dy * cos);
+}
+
+function _getAnnoCentroid(anno){
+  if(!anno || !anno.pts || !anno.pts.length) return {cx:0, cy:0};
+  const sum = anno.pts.reduce((acc, p) => {
+    acc.cx += p.cx;
+    acc.cy += p.cy;
+    return acc;
+  }, {cx:0, cy:0});
+  return {
+    cx: sum.cx / anno.pts.length,
+    cy: sum.cy / anno.pts.length,
+  };
+}
+
+function _buildFallbackPolygon(pixels){
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  pixels.forEach(p => {
+    if(p.x < minX) minX = p.x;
+    if(p.y < minY) minY = p.y;
+    if(p.x > maxX) maxX = p.x;
+    if(p.y > maxY) maxY = p.y;
+  });
+  if(!Number.isFinite(minX)) return [];
+  return [
+    {cx:minX, cy:minY},
+    {cx:maxX, cy:minY},
+    {cx:maxX, cy:maxY},
+    {cx:minX, cy:maxY},
+  ];
+}
+
+function _getAnnoSizeText(anno, cv){
+  const box = getAnnoBoundingBox(anno);
+  const wPx = Math.max(1, box.w);
+  const hPx = Math.max(1, box.h);
+  if(!cv || !cv.width || !cv.height) return `${Math.round(wPx)}x${Math.round(hPx)}px`;
+  let mmPerPxX = 1;
+  let mmPerPxY = 1;
+  if(anno.axis === 'z'){
+    mmPerPxX = (curMeta.sx * curMeta.spx) / cv.width;
+    mmPerPxY = (curMeta.sy * curMeta.spy) / cv.height;
+  } else if(anno.axis === 'y'){
+    mmPerPxX = (curMeta.sx * curMeta.spx) / cv.width;
+    mmPerPxY = (curMeta.sz * curMeta.spz) / cv.height;
+  } else {
+    mmPerPxX = (curMeta.sy * curMeta.spy) / cv.width;
+    mmPerPxY = (curMeta.sz * curMeta.spz) / cv.height;
+  }
+  const wMm = Math.max(0.1, wPx * mmPerPxX);
+  const hMm = Math.max(0.1, hPx * mmPerPxY);
+  return `${wMm.toFixed(1)}x${hMm.toFixed(1)}mm`;
+}
+
+function getAnnoBoundingBox(anno) {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  anno.pts.forEach(p => {
+    if(p.cx < minX) minX = p.cx;
+    if(p.cx > maxX) maxX = p.cx;
+    if(p.cy < minY) minY = p.cy;
+    if(p.cy > maxY) maxY = p.cy;
+  });
+  return { minX, maxX, minY, maxY, w: maxX - minX, h: maxY - minY, cx: (minX + maxX)/2, cy: (minY + maxY)/2 };
+}
+
+function _pointInBox(pt, box, pad = 0){
+  return pt.cx >= box.minX - pad && pt.cx <= box.maxX + pad &&
+         pt.cy >= box.minY - pad && pt.cy <= box.maxY + pad;
+}
+
+function _overlayPixelMatchesAnno(pn, cx, cy, anno){
+  const ov = document.getElementById('ov-' + pn);
+  if(!ov || !anno) return false;
+  try {
+    const ctx = ov.getContext('2d', {willReadFrequently:true});
+    const pixel = _getPixelAt(ctx.getImageData(0, 0, ov.width, ov.height), cx, cy);
+    if(!pixel || pixel.a <= 10) return false;
+    const cls = _matchClassByColor(pixel.r, pixel.g, pixel.b);
+    return !!cls && +cls.value === +anno.label;
+  } catch (_) {
+    return false;
+  }
+}
+
+function _pointHitsAnnoMoveArea(pn, pt, anno){
+  if(!anno || !anno.pts || anno.pts.length < 3) return false;
+  if(_pointInPolygon(pt, anno.pts)) return true;
+  if(_overlayPixelMatchesAnno(pn, pt.cx, pt.cy, anno)) return true;
+  const box = getAnnoBoundingBox(anno);
+  return _pointInBox(pt, box, 4);
+}
+
+function getConnectedPixels(imageData, startX, startY, refColor) {
+    const width = imageData.width;
+    const height = imageData.height;
+    const data = imageData.data;
+
+    function isMask(x, y) {
+        if (x < 0 || x >= width || y < 0 || y >= height) return false;
+        const idx = (y * width + x) * 4;
+        if (data[idx + 3] <= 10) return false;
+        return Math.abs(data[idx] - refColor.r) <= 18 &&
+               Math.abs(data[idx + 1] - refColor.g) <= 18 &&
+               Math.abs(data[idx + 2] - refColor.b) <= 18;
+    }
+
+    const queue = [{x: startX, y: startY}];
+    const visited = new Set();
+    visited.add(`${startX},${startY}`);
+    const pixels = [];
+
+    while (queue.length > 0) {
+        const curr = queue.shift();
+        pixels.push(curr);
+
+        // 8-neighborhood
+        const neighbors = [];
+        for(let dx = -1; dx <= 1; dx++) {
+           for(let dy = -1; dy <= 1; dy++) {
+              if(dx === 0 && dy === 0) continue;
+              neighbors.push({x: curr.x + dx, y: curr.y + dy});
+           }
+        }
+
+        for (const n of neighbors) {
+            const key = `${n.x},${n.y}`;
+            if (!visited.has(key) && isMask(n.x, n.y)) {
+                visited.add(key);
+                queue.push(n);
+            }
+        }
+    }
+    return pixels;
+}
+
+// A simple Moore-Neighbor tracing implementation
+function traceContour(imageData, startX, startY, refColor) {
+    const width = imageData.width;
+    const height = imageData.height;
+    const data = imageData.data;
+
+    function isMask(x, y) {
+        if (x < 0 || x >= width || y < 0 || y >= height) return false;
+        const idx = (y * width + x) * 4;
+        if (data[idx + 3] <= 10) return false;
+        return Math.abs(data[idx] - refColor.r) <= 18 &&
+               Math.abs(data[idx + 1] - refColor.g) <= 18 &&
+               Math.abs(data[idx + 2] - refColor.b) <= 18;
+    }
+
+    // Find a starting point on the boundary
+    let sx = startX;
+    while (sx > 0 && isMask(sx - 1, startY)) {
+        sx--;
+    }
+
+    const points = [];
+    let cx = sx;
+    let cy = startY;
+    
+    const dx = [0, 1, 1, 1, 0, -1, -1, -1];
+    const dy = [-1, -1, 0, 1, 1, 1, 0, -1];
+    let backDir = 6;
+
+    let startPoint = {x: cx, y: cy};
+    let visited = new Set();
+    let limit = 4000;
+    let count = 0;
+
+    do {
+        points.push({cx, cy});
+        let found = false;
+        for (let i = 0; i < 8; i++) {
+            let dir = (backDir + i) % 8;
+            let nx = cx + dx[dir];
+            let ny = cy + dy[dir];
+            if (isMask(nx, ny)) {
+                cx = nx;
+                cy = ny;
+                backDir = (dir + 5) % 8; 
+                found = true;
+                break;
+            }
+        }
+        if (!found) break;
+        
+        let key = `${cx},${cy}`;
+        if (visited.has(key) && cx === startPoint.x && cy === startPoint.y) {
+            break;
+        }
+        visited.add(key);
+        count++;
+    } while (count < limit);
+
+    return simplifyPolygon(points, 1.5);
+}
+
+function _extractAnnoFromLayer(canvas, axis, sliceIdx, cx, cy){
+  if(!canvas || !canvas.width || !canvas.height) return null;
+  const ctx = canvas.getContext('2d', {willReadFrequently:true});
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const pixel = _getPixelAt(imageData, cx, cy);
+  if(!pixel || pixel.a <= 10) return null;
+  const cls = _matchClassByColor(pixel.r, pixel.g, pixel.b);
+  if(!cls) return null;
+  const refColor = _hexToRgb(cls.color);
+  const componentPixels = getConnectedPixels(imageData, pixel.x, pixel.y, refColor);
+  if(!componentPixels.length) return null;
+  let pts = traceContour(imageData, pixel.x, pixel.y, refColor);
+  if(!pts || pts.length < 3) pts = _buildFallbackPolygon(componentPixels);
+  if(!pts || pts.length < 3) return null;
+  const panel = axName(axis);
+  const baseCanvas = document.getElementById('c-' + panel);
+  const seedVoxel = baseCanvas ? canvasToVoxel(axis, cx, cy, baseCanvas) : null;
+  return {
+    id: `anno_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    axis,
+    slice: sliceIdx,
+    pts,
+    label: +cls.value,
+    selected: true,
+    seedPoint: {cx, cy},
+    seedVoxel,
+  };
+}
+
+function _pickAnnoAtCanvasPoint(pn, cx, cy){
+  const axis = {axial:'z', sagittal:'x', coronal:'y'}[pn];
+  const sliceIdx = idx[axis];
+  return _extractAnnoFromLayer(document.getElementById('ov-' + pn), axis, sliceIdx, cx, cy);
+}
+
+function _replaceActiveAnno(nextAnno){
+  clearActiveAnnoSelection(false);
+  activeAnno = nextAnno;
+  if(!nextAnno){
+    _drawPolyPreview();
+    return;
+  }
+  nextAnno.selected = true;
+  vectorAnnos = vectorAnnos.filter(a => !(a.axis === nextAnno.axis && a.slice === nextAnno.slice));
+  vectorAnnos.push(nextAnno);
+  setActiveCTClass(nextAnno.label);
+  _activeAnnoDirty = false;
+  _drawPolyPreview();
+}
+
+async function _persistActiveAnnoTransform(){
+  if(!activeAnno || !activeAnno.selected || !_activeAnnoDirty || !niiPath) return;
+  if(activeAnno._saving) return;
+  if(!activeAnno.seedVoxel || activeAnno.pts.length < 3){
+    _activeAnnoDirty = false;
+    return;
+  }
+  activeAnno._saving = true;
+  const anno = activeAnno;
+  const panel = axName(anno.axis);
+  const canvas = document.getElementById('c-' + panel);
+  const overlay = document.getElementById('ov-' + panel);
+  if(!canvas || !overlay){
+    anno._saving = false;
+    return;
+  }
+
+  try {
+    const t = activeAnno._pendingTransform || {};
+    const transformResp = await fetch('/nii_mask_transform_blob', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        nii_path: niiPath,
+        axis: anno.axis,
+        slice_idx: anno.slice,
+        vx: anno.seedVoxel.vx,
+        vy: anno.seedVoxel.vy,
+        vz: anno.seedVoxel.vz,
+        canvas_w: overlay.width,
+        canvas_h: overlay.height,
+        label: anno.label,
+        center_cx: Number.isFinite(t.center_cx) ? t.center_cx : _getAnnoCentroid(anno).cx,
+        center_cy: Number.isFinite(t.center_cy) ? t.center_cy : _getAnnoCentroid(anno).cy,
+        translate_cx: Number.isFinite(t.translate_cx) ? t.translate_cx : 0,
+        translate_cy: Number.isFinite(t.translate_cy) ? t.translate_cy : 0,
+        scale: Number.isFinite(t.scale) ? t.scale : 1,
+        angle: Number.isFinite(t.angle) ? t.angle : 0,
+      })
+    });
+    const transformData = await transformResp.json();
+    if(!transformData.success) throw new Error(transformData.error || '更新掩码失败');
+
+    anno.seedPoint = _getAnnoCentroid(anno);
+    const updatedSeed = canvasToVoxel(anno.axis, anno.seedPoint.cx, anno.seedPoint.cy, canvas);
+    if(updatedSeed) anno.seedVoxel = updatedSeed;
+    _activeAnnoDirty = false;
+    anno._pendingTransform = null;
+    nCache = {};
+    ['z','y','x'].forEach(a => loadNiiSlice(a));
+    loadMaskSlices(niiPath);
+    updDetectionInfo();
+    _drawPolyPreview();
+  } catch (err) {
+    toast('❌ 选中掩码更新失败: ' + err.message);
+  } finally {
+    anno._saving = false;
+  }
+}
+
+function simplifyPolygon(points, tolerance) {
+    if (points.length <= 4) return points;
+    return douglasPeucker(points, tolerance);
+}
+
+function douglasPeucker(points, epsilon) {
+    let dmax = 0;
+    let index = 0;
+    let end = points.length - 1;
+    for (let i = 1; i < end; i++) {
+        let d = perpendicularDistance(points[i], points[0], points[end]);
+        if (d > dmax) {
+            index = i;
+            dmax = d;
+        }
+    }
+    if (dmax > epsilon) {
+        let recResults1 = douglasPeucker(points.slice(0, index + 1), epsilon);
+        let recResults2 = douglasPeucker(points.slice(index), epsilon);
+        return recResults1.slice(0, recResults1.length - 1).concat(recResults2);
+    } else {
+        return [points[0], points[end]];
+    }
+}
+
+function perpendicularDistance(p, p1, p2) {
+    let dx = p2.cx - p1.cx;
+    let dy = p2.cy - p1.cy;
+    if (dx === 0 && dy === 0) {
+        return Math.sqrt((p.cx - p1.cx)**2 + (p.cy - p1.cy)**2);
+    }
+    let u = ((p.cx - p1.cx) * dx + (p.cy - p1.cy) * dy) / (dx*dx + dy*dy);
+    let x = p1.cx + u * dx;
+    let y = p1.cy + u * dy;
+    return Math.sqrt((p.cx - x)**2 + (p.cy - y)**2);
+}
+
+function _drawVectorLayer(ctx, cv) {
+  if(!maximizedPanel) return;
+  const ax={axial:'z',sagittal:'x',coronal:'y'}[maximizedPanel];
+  const si=idx[ax];
+  const annos = vectorAnnos.filter(a => a.axis === ax && a.slice === si);
+  
+  annos.forEach(anno => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(anno.pts[0].cx, anno.pts[0].cy);
+    for(let i=1;i<anno.pts.length;i++) ctx.lineTo(anno.pts[i].cx, anno.pts[i].cy);
+    ctx.closePath();
+    
+    // Fill
+    const isErase = anno.label===0;
+    const { meta, rgb } = _getAnnoColorMeta(anno);
+    const fillAlpha = anno.selected ? 0.58 : 0.3;
+    ctx.fillStyle = isErase ? 'rgba(239,68,68,0.3)' : `rgba(${rgb.r},${rgb.g},${rgb.b},${fillAlpha})`;
+    ctx.fill();
+    
+    // Stroke
+    ctx.strokeStyle = isErase ? '#ef4444' : meta.color;
+    ctx.lineWidth = anno.selected ? 3 : 2;
+    if(anno.selected) ctx.setLineDash([4,2]);
+    ctx.stroke();
+    ctx.restore();
+    
+    // Bounding Box & Unified Control Handle (Scale + Rotate)
+    if(anno.selected) {
+      ctx.save();
+      const box = getAnnoBoundingBox(anno);
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3,3]);
+      ctx.strokeRect(box.minX, box.minY, box.w, box.h);
+      
+      // Control handle (green, bottom-right) for both scale and rotate
+      ctx.fillStyle = '#10b981';
+      ctx.beginPath();
+      ctx.arc(box.maxX, box.maxY, 6, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      const sizeText = _getAnnoSizeText(anno, cv);
+      const line1 = `类别：${meta.name}`;
+      const line2 = `大小：${sizeText}`;
+      ctx.font = '12px sans-serif';
+      const textWidth = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width);
+      const tagX = Math.max(6, Math.min(cv.width - textWidth - 30, box.minX));
+      const tagY = Math.max(18, box.minY - 10);
+      ctx.fillStyle = 'rgba(15,23,42,0.88)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.fillRect(tagX - 6, tagY - 30, textWidth + 26, 34);
+      ctx.strokeRect(tagX - 6, tagY - 30, textWidth + 26, 34);
+      ctx.fillStyle = meta.color;
+      ctx.beginPath();
+      ctx.arc(tagX + 2, tagY - 21, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillText(line1, tagX + 10, tagY - 17);
+      ctx.fillStyle = 'rgba(226,232,240,0.95)';
+      ctx.fillText(line2, tagX + 10, tagY - 3);
+      ctx.restore();
+    }
+  });
+}
+
+function _getMaxPanel(){
+  if(!maximizedPanel) return null;
+  return document.getElementById('p-'+maximizedPanel);
+}
+
+function _ensurePolyCanvas(){
+  if(!maximizedPanel) return null;
+  const panel=_getMaxPanel();
+  let pc=panel.querySelector('#poly-canvas');
+  if(!pc){
+    pc=document.createElement('canvas');
+    pc.id='poly-canvas';
+    pc.style.cssText='position:absolute;inset:0;margin:auto;z-index:30;pointer-events:none;display:block;max-width:100%;max-height:100%;image-rendering:pixelated';
+    panel.appendChild(pc);
+  }
+  // Match size to CT canvas
+  const cv=document.getElementById('c-'+maximizedPanel);
+  if(cv){ 
+    pc.width=cv.width; pc.height=cv.height;
+    pc.style.transform=cv.style.transform;
+  }
+  return pc;
+}
+
+function _drawPolyPreview(extraX, extraY){
+  const pc=_ensurePolyCanvas(); if(!pc) return;
+  const ctx=pc.getContext('2d');
+  ctx.clearRect(0,0,pc.width,pc.height);
+  
+  // Draw all saved vector annotations first
+  _drawVectorLayer(ctx, pc);
+  
+  if(!_polyPts.length) return;
+  ctx.save();
+  // filled polygon (semi-transparent)
+  ctx.beginPath();
+  ctx.moveTo(_polyPts[0].cx, _polyPts[0].cy);
+  _polyPts.slice(1).forEach(p=>ctx.lineTo(p.cx,p.cy));
+  if(extraX!==undefined) ctx.lineTo(extraX,extraY);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,100,50,.4)';
+  ctx.fill();
+  // stroke
+  ctx.beginPath();
+  ctx.moveTo(_polyPts[0].cx,_polyPts[0].cy);
+  _polyPts.slice(1).forEach(p=>ctx.lineTo(p.cx,p.cy));
+  if(extraX!==undefined) ctx.lineTo(extraX,extraY);
+  ctx.strokeStyle = 'rgb(255,100,50)';
+  ctx.lineWidth=2; ctx.setLineDash([5,3]); ctx.stroke();
+  ctx.setLineDash([]);
+  // vertex dots
+  _polyPts.forEach((p,i)=>{
+    ctx.beginPath(); ctx.arc(p.cx,p.cy,4,0,Math.PI*2);
+    ctx.fillStyle=i===0?'#f59e0b':'rgb(255,100,50)'; ctx.fill();
+  });
+  ctx.restore();
+}
+
+function _getStableCanvasForCoords(ov) {
+  if(maximizedPanel) {
+    const cv = document.getElementById('c-' + maximizedPanel);
+    if(cv && cv.width > 0 && cv.height > 0) return cv;
+  }
+  const pc = document.getElementById('poly-canvas');
+  if(pc && pc.width > 0 && pc.height > 0) return pc;
+  return ov;
+}
+
+function _isEventInsideCanvas(e, ov) {
+  if(!e || !ov) return false;
+  const base = _getStableCanvasForCoords(ov);
+  const rect = base.getBoundingClientRect();
+  return e.clientX >= rect.left && e.clientX <= rect.right &&
+         e.clientY >= rect.top && e.clientY <= rect.bottom;
+}
+
+function _clampCanvasCoord(v, max) {
+  if(!Number.isFinite(v)) return 0;
+  // Keep live transforms usable when dragging just outside the canvas, but reject
+  // browser/event-coordinate spikes that would self-intersect the saved polygon.
+  const margin = Math.max(max, 256);
+  return Math.max(-margin, Math.min(max + margin, v));
+}
+
+function _getCanvasCoords(e, ov) {
+  const base = _getStableCanvasForCoords(ov);
+  const rect = base.getBoundingClientRect();
+  const rw = Math.max(1, rect.width);
+  const rh = Math.max(1, rect.height);
+  let cx = (e.clientX - rect.left) * (base.width / rw);
+  let cy = (e.clientY - rect.top) * (base.height / rh);
+  cx = _clampCanvasCoord(cx, base.width);
+  cy = _clampCanvasCoord(cy, base.height);
+  return { cx, cy };
+}
+
+function _onMaxPanelClick(e){
+  if(e.target.closest('#ct-toolbar')) return;
+  clearActiveAnnoSelection(true);
+}
+
+function _onMaxPanelMousemove(e){
+  if(!_polyPts.length) return;
+  const ov=document.getElementById('ov-'+maximizedPanel);
+  if(!ov) return;
+  const {cx, cy} = _getCanvasCoords(e, ov);
+  _drawPolyPreview(cx, cy);
+}
+
+// Attach mouse listeners to panels for polygon and panning
+// Attach mouse listeners to panels for polygon and panning
+let _ctPanX=0, _ctPanY=0, _isPanning=false, _panStartX=0, _panStartY=0;
+let _isScalingAnno = false;
+let _annoScaleStartDist = 1;
+let _annoScaleStartPts = [];
+let _annoScaleCenter = {cx: 0, cy: 0};
+let _activeDragPanel = null;
+let _suppressNextMaxClick = false;
+
+function _didAnnoPtsChange(beforePts, afterPts, threshold = 0.75){
+  if(!beforePts || !afterPts || beforePts.length !== afterPts.length) return true;
+  let maxMove = 0;
+  for(let i = 0; i < beforePts.length; i++){
+    const dx = afterPts[i].cx - beforePts[i].cx;
+    const dy = afterPts[i].cy - beforePts[i].cy;
+    maxMove = Math.max(maxMove, Math.hypot(dx, dy));
+  }
+  return maxMove > threshold;
+}
+
+['axial','sagittal','coronal'].forEach(pn=>{
+  const pEl=document.getElementById('p-'+pn);
+  pEl.addEventListener('click',  e=>{
+    if(maximizedPanel!==pn) return;
+    if(_suppressNextMaxClick){
+      _suppressNextMaxClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    _onMaxPanelClick(e);
+  });
+  
+  pEl.addEventListener('mousedown', e=>{
+    if(maximizedPanel!==pn) return;
+    if(_isToolbarEvent(e) || _isInteractiveEvent(e)) return;
+    if(_painting) return; // Prevent panning if using the brush tool
+    if(ctTool==='select' && e.button===0){
+      const ov = document.getElementById('ov-'+pn);
+      if(!ov || !_isEventInsideCanvas(e, ov)) return;
+      const {cx, cy} = _getCanvasCoords(e, ov);
+
+      if(activeAnno && activeAnno.axis === {axial:'z', sagittal:'x', coronal:'y'}[pn] && activeAnno.slice === idx[activeAnno.axis]){
+        const handle = _getAnnoControlHandle(activeAnno);
+        if(Math.hypot(cx - handle.cx, cy - handle.cy) <= handle.r){
+          _isScalingAnno = true;
+          _activeDragPanel = pn;
+          _annoScaleCenter = {cx: handle.box.cx, cy: handle.box.cy};
+          _annoScaleStartDist = Math.max(1, Math.hypot(cx - _annoScaleCenter.cx, cy - _annoScaleCenter.cy));
+          _annoRotationStartAngle = Math.atan2(cy - _annoScaleCenter.cy, cx - _annoScaleCenter.cx);
+          _annoScaleStartPts = _cloneAnnoPoints(activeAnno.pts);
+          activeAnno._pendingTransform = {
+            center_cx: _annoScaleCenter.cx,
+            center_cy: _annoScaleCenter.cy,
+            translate_cx: 0,
+            translate_cy: 0,
+            scale: 1,
+            angle: 0,
+          };
+          e.preventDefault();
+          return;
+        }
+        if(_pointHitsAnnoMoveArea(pn, {cx, cy}, activeAnno)){
+          _isDraggingAnno = true;
+          _activeDragPanel = pn;
+          _annoDragStartX = cx;
+          _annoDragStartY = cy;
+          _annoDragOriginX = cx;
+          _annoDragOriginY = cy;
+          _activeAnnoUndoPts = _cloneAnnoPoints(activeAnno.pts);
+          const dragCenter = _getAnnoCentroid(activeAnno);
+          activeAnno._pendingTransform = {
+            center_cx: dragCenter.cx,
+            center_cy: dragCenter.cy,
+            translate_cx: 0,
+            translate_cy: 0,
+            scale: 1,
+            angle: 0,
+          };
+          e.preventDefault();
+          return;
+        }
+      }
+
+      const pickedAnno = _pickAnnoAtCanvasPoint(pn, cx, cy);
+      if(pickedAnno){
+        _suppressNextMaxClick = true;
+        _replaceActiveAnno(pickedAnno);
+        e.preventDefault();
+        return;
+      }
+
+      clearActiveAnnoSelection(false);
+      _isPanning = true;
+      _activeDragPanel = pn;
+      _panStartX = e.clientX - _ctPanX;
+      _panStartY = e.clientY - _ctPanY;
+      _drawPolyPreview();
+      e.preventDefault();
+    }
+  });
+
+  pEl.addEventListener('mousemove',e=>{ 
+    if(maximizedPanel!==pn) return;
+    if(_isToolbarEvent(e) || _isInteractiveEvent(e)) return;
+    if(_activeDragPanel) return;
+    if(!_isPanning && !_isDraggingAnno && !_isScalingAnno) {
+      _onMaxPanelMousemove(e); 
+    }
+  });
+});
+
+function _handleWindowDragMove(e){
+  const pn = _activeDragPanel || maximizedPanel;
+  if(!pn || maximizedPanel!==pn) return;
+
+  if(_isScalingAnno && activeAnno){
+     const ov=document.getElementById('ov-'+pn);
+     if(!ov) return;
+     const {cx, cy} = _getCanvasCoords(e, ov);
+     const curDist = Math.sqrt((cx - _annoScaleCenter.cx)**2 + (cy - _annoScaleCenter.cy)**2);
+     const scaleFactor = Math.max(0.02, Math.min(50, curDist / Math.max(1, _annoScaleStartDist)));
+     const curAngle = Math.atan2(cy - _annoScaleCenter.cy, cx - _annoScaleCenter.cx);
+     const angleDelta = curAngle - _annoRotationStartAngle;
+     const cos = Math.cos(angleDelta);
+     const sin = Math.sin(angleDelta);
+
+       activeAnno.pts.forEach((p, idx) => {
+        const startPt = _annoScaleStartPts[idx];
+        p.cx = startPt.cx;
+        p.cy = startPt.cy;
+        _transformPointAround(p, _annoScaleCenter, scaleFactor, cos, sin);
+       });
+       activeAnno._pendingTransform = {
+         center_cx: _annoScaleCenter.cx,
+         center_cy: _annoScaleCenter.cy,
+         translate_cx: 0,
+         translate_cy: 0,
+         scale: scaleFactor,
+         angle: angleDelta,
+       };
+       _activeAnnoDirty = true;
+       _drawPolyPreview();
+     e.preventDefault();
+     return;
+  }
+  
+  if(_isDraggingAnno && activeAnno){
+     const ov=document.getElementById('ov-'+pn);
+     if(!ov) return;
+     const {cx, cy} = _getCanvasCoords(e, ov);
+     const dx = cx - _annoDragStartX;
+     const dy = cy - _annoDragStartY;
+     if(Number.isFinite(dx) && Number.isFinite(dy)){
+       activeAnno.pts.forEach(p => { p.cx += dx; p.cy += dy; });
+       _annoDragStartX = cx;
+       _annoDragStartY = cy;
+       if(activeAnno._pendingTransform){
+         activeAnno._pendingTransform.translate_cx = cx - _annoDragOriginX;
+         activeAnno._pendingTransform.translate_cy = cy - _annoDragOriginY;
+       }
+       _activeAnnoDirty = true;
+       _drawPolyPreview();
+     }
+     e.preventDefault();
+     return;
+  }
+  
+  if(_isPanning){
+    _ctPanX = e.clientX - _panStartX;
+    _ctPanY = e.clientY - _panStartY;
+    _updateTransform();
+    e.preventDefault();
+  }
+}
+
+window.addEventListener('mousemove', _handleWindowDragMove);
+
+window.addEventListener('mouseup', ()=>{ 
+  _isPanning=false; 
+  let wasDragging = _isDraggingAnno;
+  let wasScaling = _isScalingAnno;
+  const dragChanged = wasDragging && activeAnno && _didAnnoPtsChange(_activeAnnoUndoPts, activeAnno.pts);
+  const scaleChanged = wasScaling && activeAnno && _didAnnoPtsChange(_annoScaleStartPts, activeAnno.pts);
+  _isDraggingAnno=false;
+  _isScalingAnno=false;
+  _isRotatingAnno=false;
+  _activeDragPanel=null;
+  if((wasDragging || wasScaling) && activeAnno) {
+     _suppressNextMaxClick = true;
+     activeAnno.selected = true;
+     _drawPolyPreview();
+     if(dragChanged || scaleChanged){
+       _persistActiveAnnoTransform();
+     } else {
+       _activeAnnoDirty = false;
+     }
+  }
+  _activeAnnoUndoPts = null;
+  _annoScaleStartPts = [];
+});
+
+function _updateTransform(){
+  if(!maximizedPanel) return;
+  ['c-','ov-'].forEach(prefix=>{
+    const el=document.getElementById(prefix+maximizedPanel);
+    if(el){
+      el.style.transform = `translate(${_ctPanX}px, ${_ctPanY}px) scale(${_ctZoomScale})`;
+    }
+  });
+  const pc=document.getElementById('poly-canvas');
+  if(pc) pc.style.transform = `translate(${_ctPanX}px, ${_ctPanY}px) scale(${_ctZoomScale})`;
+}
+
+function finishPolygon(){
+  cancelPolygon();
+  toast('框选标注功能已移除，请使用画笔或橡皮擦');
+}
+
+function cancelPolygon(){
+  _polyPts=[]; _polyAxis=null; _polySlice=null;
+  const pc=document.getElementById('poly-canvas');
+  if(pc) {
+    const ctx=pc.getContext('2d');
+    ctx.clearRect(0,0,pc.width,pc.height);
+    _drawVectorLayer(ctx, pc);
+  }
+}
+
+function deleteSliceMask(){
+  if(!niiPath||!maximizedPanel){ toast('请先加载掩码文件'); return; }
+  const ax={axial:'z',sagittal:'x',coronal:'y'}[maximizedPanel];
+  const si=idx[ax];
+  // Send an erase polygon that covers the whole slice
+  const ov=document.getElementById('ov-'+maximizedPanel);
+  if(!ov) return;
+  const W=ov.width, H=ov.height;
+  if(!confirm('🗑 确定要清除当前切片上的【所有掩码】吗？\n\n(如果只想删除部分区域，请使用橡皮擦工具)')) return;
+  const payload = {nii_path:niiPath, axis:ax, slice_idx:si,
+    polygon:[{cx:0,cy:0},{cx:W,cy:0},{cx:W,cy:H},{cx:0,cy:H}],
+    canvas_w:W, canvas_h:H, label:0};
+  fetch('/nii_mask_polygon',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)}).then(r=>r.json()).then(d=>{
+      if(d.success){ nCache={};['z','y','x'].forEach(a=>loadNiiSlice(a));loadMaskSlices(niiPath);updDetectionInfo();toast('🗑 当前切片掩码已清除');}
+      else toast('❌ '+d.error);
+  }).catch(e=>toast('❌ '+e));
+}
+
+function copyToAdjacentSlice(){
+  if(!niiPath||!maximizedPanel){ toast('请先加载掩码文件'); return; }
+  toast('📋 复制功能开发中');
+}
+
+function ctZoom(factor){
+  _ctZoomScale *= factor;
+  _ctZoomScale = Math.max(0.1, Math.min(_ctZoomScale, 20.0));
+  _updateTransform();
+  toast(`🔍 缩放: ${Math.round(_ctZoomScale*100)}%`);
+}
+
+// keyboard
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && _medsam2PickMode){ _resetMedSAM2UI(); return; }
+  if(e.key==='Escape'){ if(maximizedPanel){ if(_polyPts.length) cancelPolygon(); else restorePanels(); } return; }
+  if(e.key==='Enter'&&_polyPts.length>=3){ finishPolygon(); return; }
+  if(e.ctrlKey&&e.key==='z'){e.preventDefault();doUndo();return;}
+  if(e.ctrlKey&&e.key==='s'){e.preventDefault();doSave();return;}
+  if(!e.ctrlKey&&!e.altKey){
+    if(e.key==='b'||e.key==='B'){setCTTool('brush');return;}
+    if(e.key==='e'||e.key==='E'){setCTTool('eraser');return;}
+    if(e.key==='v'||e.key==='V'){setCTTool('select');return;}
+  }
+  // slice navigation only in select/pan mode
+  if(ctTool!=='select') return;
+  if(e.key==='ArrowUp'||e.key==='PageUp'){clearActiveAnnoSelection(true);idx.z=Math.min(maxIdx.z,idx.z+1);document.getElementById('sl-z').value=idx.z;updSI('z');loadSlice('z');}
+  else if(e.key==='ArrowDown'||e.key==='PageDown'){clearActiveAnnoSelection(true);idx.z=Math.max(0,idx.z-1);document.getElementById('sl-z').value=idx.z;updSI('z');loadSlice('z');}
+});
+
+_renderMedSAM2PromptState();
+_syncSliderRowVisibility();
+// wheel on panels
+['axial','sagittal','coronal'].forEach(pn=>{
+  const ax={axial:'z',sagittal:'x',coronal:'y'}[pn];
+  document.getElementById('p-'+pn).addEventListener('wheel',e=>{
+    e.preventDefault();
+    clearActiveAnnoSelection(true);
+    const d=e.deltaY>0?1:-1;
+    idx[ax]=Math.max(0,Math.min(maxIdx[ax],idx[ax]+d));
+    document.getElementById('sl-'+ax).value=idx[ax];
+    updSI(ax);loadSlice(ax);
+  },{passive:false});
+});
+
+let _tt;
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),3000);}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  initCTClasses();
+  updateCTBulkActionState();
+  setCTExportFormat('nifti');
+  checkMedSAM2Status();
+  const f=document.querySelector('.vi');
+  if(f)selVol(f);
+});
+window.addEventListener('resize',()=>{if(curId!==null)loadAll();});
+</script>
+{% endblock %}

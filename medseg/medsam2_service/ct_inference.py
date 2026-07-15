@@ -1,0 +1,1 @@
+from medsam2_service_app.predictor import MedSAM2GPUService

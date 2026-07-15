@@ -1,0 +1,33 @@
+# ==============================================================================
+# MedSeg — 医学 CT 图像分割独立应用依赖
+# ==============================================================================
+# 安装方法（GPU服务器）:
+#   conda create -n medseg python=3.10 -y
+#   conda activate medseg
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+#   pip install -r requirements.txt
+# ==============================================================================
+
+# 核心科学计算 & 图像处理
+numpy>=1.24.0,<2.0.0
+scipy>=1.10.0
+scikit-image>=0.21.0
+SimpleITK>=2.3.0
+Pillow>=10.0.0
+
+# Web 框架
+Flask==3.1.2
+Flask-Login==0.6.3
+Werkzeug==3.1.3
+waitress==3.0.2
+
+# MedSAM2 / MedSAM3 独立推理服务（FastAPI）
+fastapi>=0.110.0
+uvicorn==0.32.0
+requests>=2.31.0
+
+# 工具
+filelock==3.19.1
+psutil==7.0.0
+PyYAML==6.0.2
+tqdm==4.66.1

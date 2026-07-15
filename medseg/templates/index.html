@@ -1,0 +1,2851 @@
+{% extends "labeler_base.html" %}
+{% block title %}MedSeg - 医学分割平台{% endblock %}
+{% block content %}
+<style>
+    .project-actions {
+        display: flex;
+        gap: 8px;
+        margin: 10px 0;
+    }
+
+    .action-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 4px;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        background: white;
+        color: #333;
+        text-decoration: none;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .annotation-btn:hover {
+        background: linear-gradient(45deg, #007bff, #00c4ff);
+        color: white;
+        border-color: #007bff;
+    }
+
+    .training-btn:hover {
+        background: linear-gradient(45deg, #28a745, #20c997);
+        color: white;
+        border-color: #28a745;
+    }
+
+    .action-btn i {
+        font-size: 16px;
+    }
+
+    .action-btn span {
+        font-weight: 500;
+    }
+
+    .project-images img,
+    .project-images video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .project-media-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #8a8a8a;
+        font-size: 13px;
+        background: #f5f7fb;
+    }
+
+    /* 进度条样式 */
+    .progress-bar-mini {
+        width: 100%;
+        height: 20px;
+        background: #e0e0e0;
+        border-radius: 10px;
+        margin: 8px 0;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(45deg, #28a745, #20c997);
+        border-radius: 10px;
+        transition: width 0.3s ease;
+    }
+
+    .progress-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 11px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .project-info {
+        position: relative;
+    }
+
+    .menu-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: none;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        color: #666;
+        padding: 8px 10px;
+        border-radius: 4px;
+        transition: all 0.3s ease;
+        z-index: 100;
+        pointer-events: auto;
+    }
+
+    .menu-btn:hover {
+        background: #f0f0f0;
+        color: #333;
+    }
+
+    .menu-dropdown {
+        position: absolute;
+        top: 40px;
+        right: 5px;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 9999;
+        min-width: 120px;
+        pointer-events: auto;
+    }
+
+    .project-card.menu-open {
+        z-index: 1000;
+    }
+
+    .menu-dropdown button {
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        border: none;
+        background: none;
+        text-align: left;
+        cursor: pointer;
+        font-size: 14px;
+        color: #333;
+        transition: background 0.3s ease;
+    }
+
+    .menu-dropdown button:hover {
+        background: #f8f9fa;
+    }
+
+    .menu-dropdown button:first-child {
+        border-radius: 6px 6px 0 0;
+    }
+
+    .menu-dropdown button:last-child {
+        border-radius: 0 0 6px 6px;
+    }
+</style>
+<div class="dashboard">
+    <div class="header">
+        <h2>🫁 医学分割项目</h2>
+        {% if current_user.role == 'admin' %}
+        <button class="create-btn">
+            <i class="fa-solid fa-folder-plus"></i> 创建 CT 项目
+        </button>
+        {% endif %}
+    </div>
+    <div class="projects-grid">
+        <style>
+            .empty-state {
+                grid-column: 1 / -1;
+                text-align: center;
+                padding: 100px 20px;
+                color: #888;
+                background: #fcfcfc;
+                border: 2px dashed #eee;
+                border-radius: 8px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+                min-height: 300px;
+            }
+
+            .empty-state .empty-icon {
+                font-size: 64px;
+                color: #ddd;
+                margin-bottom: 24px;
+            }
+
+            .empty-state p {
+                font-size: 18px;
+                margin: 0;
+            }
+        </style>
+        {% for project in projects %}
+        <div class="project-card" data-project="{{ project.name }}" data-setup-type="{{ project.setup_type }}">
+            <div class="project-images">
+                {% if project.images and project.images|length > 0 %}
+                {% for media in project.images %}
+                {% if project.setup_type and 'Video' in project.setup_type %}
+                <video src="{{ media }}" muted preload="metadata" playsinline></video>
+                {% else %}
+                <img src="{{ media }}" alt="项目预览图">
+                {% endif %}
+                {% endfor %}
+                {% else %}
+                {% if project.setup_type == 'CT 肺结节检测' %}
+                <div class="project-media-placeholder" style="background:#eaf1fb;">
+                    <img src="{{ url_for('static', filename='img/medical.png', v='20260525b') }}" alt="医学影像预览"
+                        style="width:100%;height:100%;object-fit:cover;">
+                </div>
+                {% else %}
+                <div class="project-media-placeholder">暂无预览</div>
+                {% endif %}
+                {% endif %}
+            </div>
+            <div class="project-info">
+                <span class="project-name">{{ project.name }}</span>
+                {% if project.progress and project.progress.is_ct %}
+                <div class="progress-bar-mini" style="background:transparent;border:none">
+                    <span class="progress-text" style="color:#3b82f6">🫁 {{ project.progress.total }} 个CT扫描</span>
+                </div>
+                {% elif project.progress and project.progress.total > 0 %}
+                <div class="progress-bar-mini">
+                    <div class="progress-fill"
+                        style="width: {{ (project.progress.completed / project.progress.total * 100)|int }}%"></div>
+                    <span class="progress-text">{{ project.progress.completed }}/{{ project.progress.total }}</span>
+                </div>
+                {% endif %}
+                <div class="project-actions">
+                    <button class="action-btn annotation-btn" onclick="window.location.href='/ct/{{ project.name }}'"
+                        title="CT 浏览器">
+                        <i class="fas fa-lungs"></i>
+                        <span>CT 浏览</span>
+                    </button>
+                </div>
+                {% if current_user.role == 'admin' %}
+                <button class="menu-btn" id="btn-{{ project.name }}" data-target="menu-{{ project.name }}">⋮</button>
+                <div class="menu-dropdown" style="display: none;" id="menu-{{ project.name }}">
+                    <button class="overview-btn" data-project="{{ project.name }}">
+                        <i class="fa-solid fa-chart-line"></i> 概览
+                    </button>
+                    <button class="manage-classes-btn" data-project="{{ project.name }}">
+                        <i class="fa-solid fa-tags"></i> 管理类别
+                    </button>
+                    <button class="assign-btn"
+                        onclick="event.stopPropagation(); window.openAssignModal('{{ project.name }}')">
+                        <i class="fa-solid fa-user-check"></i> 任务分配
+                    </button>
+                    <button class="import-btn" data-project="{{ project.name }}">
+                        <i class="fa-solid fa-upload"></i> 添加 CT 数据
+                    </button>
+                    <button class="delete-btn" data-project="{{ project.name }}">
+                        <i class="fa-solid fa-trash-can"></i> 删除项目
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-state" style="border: 2px dashed var(--border-color); background: rgba(255,255,255,0.6); padding: 60px 24px;">
+            <img src="{{ url_for('static', filename='img/medical.png') }}" alt="医学影像分割" class="empty-illustration" style="max-width: 260px; height: auto; margin-bottom: 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(67, 97, 238, 0.15);">
+            {% if current_user.role == 'admin' %}
+            <h3 style="font-size: 1.1rem; font-weight: 600; color: var(--text-color); margin-bottom: 8px;">暂无医学图像分割项目</h3>
+            <p style="font-size: 0.875rem; color: var(--text-light); max-width: 320px; line-height: 1.5; margin: 0 auto;">点击右上角的 <strong>“创建 CT 项目”</strong> 按钮导入 MHD 或 NIfTI 序列开始您的标注流程。</p>
+            {% else %}
+            <h3 style="font-size: 1.1rem; font-weight: 600; color: var(--text-color); margin-bottom: 8px;">暂无分配的任务</h3>
+            <p style="font-size: 0.875rem; color: var(--text-light); max-width: 320px; line-height: 1.5; margin: 0 auto;">系统未检测到分配给您的项目，请联系管理员为您分派 CT 序列进行分割标注。</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="modal">
+    <div class="modal-content">
+        <button class="close-btn">×</button>
+        <h2>创建新项目</h2>
+        <form id="project-form" enctype="multipart/form-data">
+            <div class="tab-headers">
+                <button type="button" class="tab-btn active" data-tab="settings">项目设置</button>
+                <button type="button" class="tab-btn" data-tab="setup">配置设置</button>
+                <button type="button" class="tab-btn" data-tab="import">数据导入</button>
+                <button type="button" class="tab-btn disabled" data-tab="summary" id="summary-tab">摘要</button>
+            </div>
+            <div class="tab-content active" id="settings">
+                <div class="form-group">
+                    <label>项目名称 *</label>
+                    <input type="text" id="project-name" name="project_name" value="#VisioFirm" required>
+                </div>
+                <div class="form-group">
+                    <label>描述</label>
+                    <textarea id="description" name="description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>结节征象分类（用逗号、句号或分号分隔） *</label>
+                    <input type="text" id="class-names" name="class_names" placeholder="例如：分叶, 毛刺, 空泡">
+                    <div class="class-suggestions">
+                        <input type="text" id="class-search" placeholder="搜索结节诊断特征/征象...">
+                        <div id="class-tags" class="class-tags"></div>
+                    </div>
+                </div>
+                <button type="button" class="next-btn" data-next-tab="setup">下一步</button>
+            </div>
+            <div class="tab-content" id="setup">
+                <div class="form-group">
+                    <label>设置 *</label>
+                    <div class="setup-choice">
+                        <button type="button" class="setup-btn active" data-type="CT 肺结节检测">
+                            <img src="{{ url_for('static', filename='img/medical.png', v='20260525b') }}" alt="医学影像检测"
+                                class="setup-gif" style="width:80px;height:80px;object-fit:contain;">
+                            <span>CT 医学分割</span>
+                        </button>
+                    </div>
+                    <p style="color:#888;font-size:13px;margin-top:8px;">支持 MHD/RAW 及 NIfTI (.nii.gz) 格式，兼容 MedSAM2 / MedSAM3 推理</p>
+                    <input type="hidden" id="setup-type" name="setup_type" required>
+                </div>
+                <button type="button" class="next-btn" data-next-tab="import">下一步</button>
+            </div>
+            <div class="tab-content" id="import">
+                <div class="form-group">
+                    <label>数据导入 *</label>
+
+                    <div class="import-method-selector">
+                        <div class="method-tabs">
+                            <button type="button" class="method-tab active" data-method="upload"
+                                onclick="switchImportMethod('upload')">
+                                <i class="fa-solid fa-upload"></i> 上传文件
+                            </button>
+                            <button type="button" class="method-tab" data-method="dataset"
+                                onclick="switchImportMethod('dataset')">
+                                <i class="fa-solid fa-database"></i> 选择数据集
+                            </button>
+                        </div>
+
+                        <div class="import-method-content active" id="upload-content">
+                            <div class="drop-zone" id="drop-zone">
+                                <i class="fa-solid fa-file-arrow-down drop-icon"></i>
+                                <p>将图片/文件夹/压缩包拖拽到此处。</p>
+                                <p><strong>支持的文件格式：</strong></p>
+                                <p>图片：.webp, .jpg, .jpeg, .png, .avif</p>
+                                <p>视频：.mp4, .avi, .mov, .mkv</p>
+                                <p>医学影像体数据：.mhd + .raw（需同时上传）</p>
+                                <p>标注：.json, .yaml, .txt</p>
+                                <p>包含图片/视频/标注的压缩文件：.zip, .tar, .rar</p>
+                                <p>图片文件夹</p>
+                                <p id="compress-message" class="compress-message" style="display: none;">
+                                    检测到压缩文件！将在提交时解压。如果您有标注文件，它们将在项目创建后添加。</p>
+                            </div>
+                            <input type="file" id="file-input" name="files" multiple
+                                accept=".webp,.WEBP,.jpg,.JPG,.jpeg,.JPEG,.png,.PNG,.avif,.AVIF,.mp4,.MP4,.avi,.AVI,.mov,.MOV,.mkv,.MKV,.json,.JSON,.yaml,.YAML,.txt,.TXT,.zip,.ZIP,.tar,.TAR,.rar,.RAR,.mhd,.MHD,.raw,.RAW"
+                                style="display: none;">
+                            <div id="file-list" class="file-list"
+                                style="display: none; max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
+                            <div id="loading-waiter" class="loading-waiter" style="display: none;">
+                                <div class="spinner"></div>
+                                <p>正在处理图片...</p>
+                            </div>
+                        </div>
+
+                        <div class="import-method-content" id="dataset-content">
+                            <div class="dataset-selector-wrapper">
+                                <div id="projectDatasetSelector" class="project-dataset-selector">
+                                    <div class="loading">正在加载数据集...</div>
+                                </div>
+                                <input type="hidden" id="selected-datasets" name="selected_datasets" value="">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="progress-container" style="margin-top: 10px;"></div>
+                <button type="button" class="next-btn" data-next-tab="summary">下一步</button>
+            </div>
+            <div class="tab-content" id="summary">
+                <h3>标注摘要</h3>
+                <div id="annotation-summary"></div>
+                <div class="create-btn-container">
+                    <button type="submit" class="create-btn">创建项目</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="import-modal">
+    <div class="modal-content">
+        <button class="close-btn import-close-btn">×</button>
+        <h2 class="modal-title">导入更多 CT 数据</h2>
+        <form id="import-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label class="import-label">为 <span id="import-project-name" class="project-name-highlight"></span>
+                    导入 CT 序列数据</label>
+                <div class="drop-zone" id="import-drop-zone">
+                    <i class="fa-solid fa-file-arrow-down drop-icon"></i>
+                    <p>将图片/文件夹/压缩包拖拽到此处。</p>
+                    <p><strong>支持的文件格式：</strong></p>
+                    <p>图片：.webp, .jpg, .jpeg, .png, .avif</p>
+                    <p>视频：.mp4, .avi, .mov, .mkv</p>
+                    <p>标注：.json, .yaml, .txt</p>
+                    <p>包含图片/视频/标注的压缩文件：.zip, .tar, .rar</p>
+                    <p>图片文件夹</p>
+                    <p id="import-compress-message" class="compress-message" style="display: none;">检测到压缩文件！将在提交时解压。</p>
+                </div>
+                <input type="file" id="import-file-input" name="files" multiple
+                    accept=".webp,.WEBP,.jpg,.JPG,.jpeg,.JPEG,.png,.PNG,.avif,.AVIF,.mp4,.MP4,.avi,.AVI,.mov,.MOV,.mkv,.MKV,.json,.JSON,.yaml,.YAML,.txt,.TXT,.zip,.ZIP,.tar,.TAR,.rar,.RAR"
+                    style="display: none;" webkitdirectory directory>
+                <div id="import-file-list" class="file-list"
+                    style="display: none; max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
+                <div id="import-loading-waiter" class="loading-waiter" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>正在处理图片...</p>
+                </div>
+            </div>
+            <div id="import-progress-container" style="margin-top: 10px;"></div>
+            <button type="submit" class="create-btn" disabled>导入文件</button>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="delete-confirm-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>⚠️ 确认删除</h2>
+            <button class="close-btn" id="cancel-delete">×</button>
+        </div>
+        <div class="modal-body">
+            <p id="delete-message"></p>
+        </div>
+        <div class="modal-footer">
+            <button class="next-btn" id="confirm-delete">是的，删除</button>
+            <button class="close-btn" id="cancel-delete-footer">取消</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="overview-modal">
+    <div class="modal-content">
+        <button class="close-btn overview-close-btn">×</button>
+        <h2 class="modal-title">项目概览：<span id="overview-project-name"></span></h2>
+        <div id="total-images">总图片数：<span id="total-images-count"></span></div>
+        <div id="overview-note" style="margin:10px 0 16px;color:#666;font-size:13px;"></div>
+        <div id="overview-metrics" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;"></div>
+        <div id="overview-charts">
+            <div id="image-stats"></div>
+            <div id="class-distribution"></div>
+            <div id="annotations-per-image"></div>
+        </div>
+        <div id="overview-volume-table" style="margin-top:18px;"></div>
+    </div>
+</div>
+
+<div class="modal" id="classes-modal">
+    <div class="modal-content">
+        <button class="close-btn classes-close-btn">×</button>
+        <h2 class="modal-title">管理类别：<span id="classes-project-name"></span></h2>
+
+        <div class="add-class-section">
+            <input type="text" id="new-class-input" placeholder="输入新类别名称">
+            <button id="add-class-btn" class="create-btn">添加</button>
+        </div>
+
+        <div id="classes-list" class="classes-list">
+            <div class="loading">正在加载类别...</div>
+        </div>
+
+        <div id="class-delete-confirm" class="class-delete-confirm" style="display: none;">
+            <div class="confirm-content">
+                <p id="class-delete-message"></p>
+                <div class="confirm-buttons">
+                    <button id="confirm-class-delete" class="create-btn danger-btn">确认删除</button>
+                    <button id="cancel-class-delete" class="close-btn">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="assign-modal">
+    <div class="modal-content assign-modal-content">
+        <button class="close-btn assign-close-btn">×</button>
+        <h2 class="modal-title">任务分配：<span id="assign-project-name"></span></h2>
+
+        <div class="assign-container">
+            <div class="assign-images-section">
+                <div class="section-header">
+                    <h3>图片列表</h3>
+                    <div class="select-actions">
+                        <button class="small-btn" onclick="selectAllImages()">全选</button>
+                        <button class="small-btn" onclick="deselectAllImages()">取消全选</button>
+                    </div>
+                </div>
+                <div class="filter-bar">
+                    <select id="image-filter">
+                        <option value="all">全部图片</option>
+                        <option value="unassigned">未分配</option>
+                        <option value="assigned">已分配</option>
+                    </select>
+                    <span id="image-count">0 张图片</span>
+                </div>
+                <div id="assign-images-list" class="assign-images-list">
+                    <div class="loading">正在加载图片...</div>
+                </div>
+            </div>
+
+            <div class="assign-annotators-section">
+                <h3>分配给标注员</h3>
+
+                <!-- Reset History Checkbox -->
+                <div id="reset-history-wrapper"
+                    style="margin: 10px 0; padding: 10px; background: #fff3e0; border-radius: 4px; border: 1px solid #ffe0b2;">
+                    <label style="display: flex; align-items: center; cursor: pointer; color: #e65100;">
+                        <input type="checkbox" id="reset-history-checkbox" style="margin-right: 8px;">
+                        <span style="font-weight: 500;">
+                            重新分配时重置进度
+                        </span>
+                    </label>
+                    <div style="font-size: 0.85em; color: #bf360c; margin-top: 4px; margin-left: 24px;">
+                        勾选后，系统将清除选中标注员的"已完成"记录，即从0开始计数（不删数据）。
+                    </div>
+                </div>
+
+                <div id="annotators-list" class="annotators-list">
+                    <div class="loading">正在加载标注员...</div>
+                </div>
+                <div class="assign-actions">
+                    <button class="create-btn" id="manual-assign-btn" onclick="manualAssign()">
+                        <i class="fas fa-user-check"></i> 分配选中图片
+                    </button>
+                    <button class="create-btn auto-btn" onclick="autoAssign()">
+                        <i class="fas fa-magic"></i> 自动平均分配
+                    </button>
+                </div>
+
+                <!-- 标注员任务统计 -->
+                <div id="annotator-stats-container"
+                    style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; display: none;">
+                    <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">标注员进度监控</h4>
+                    <div class="annotator-stats-list" id="annotator-stats-list">
+                        <!-- 统计数据将渲染在这里 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="assign-stats">
+            <div class="stat-item">
+                <span class="stat-label">总图片</span>
+                <span class="stat-value" id="stat-total">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">已分配</span>
+                <span class="stat-value" id="stat-assigned">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">未分配</span>
+                <span class="stat-value" id="stat-unassigned">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">已完成</span>
+                <span class="stat-value" id="stat-completed">0</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="users-modal">
+    <div class="modal-content users-modal-content">
+        <button class="close-btn users-close-btn">×</button>
+        <h2 class="modal-title">用户管理</h2>
+
+        <div class="users-table-container">
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>姓名</th>
+                        <th>邮箱</th>
+                        <th>角色</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body">
+                    <tr>
+                        <td colspan="6" class="loading">正在加载用户...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/setup.css') }}">
+<script type="module" src="/static/js/jslib/plotly-2.35.2.min.js"></script>
+
+<style>
+    .progress-container {
+        margin-bottom: 10px;
+    }
+
+    .progress-bar {
+        width: 100%;
+        background-color: #f0f0f0;
+        border-radius: 5px;
+        overflow: hidden;
+    }
+
+    .progress {
+        height: 20px;
+        background-color: #4caf50;
+        width: 0%;
+        transition: width 0.3s;
+    }
+
+    .file-progress {
+        margin-top: 5px;
+        font-size: 14px;
+    }
+
+    .upload-success {
+        color: green;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+
+    .create-btn:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .loading-waiter {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 10px;
+    }
+
+    .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        animation: spin 1s linear infinite;
+        margin-right: 10px;
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .create-btn-container {
+        position: relative;
+
+    }
+
+    #annotation-summary {
+        margin-bottom: 20px;
+    }
+
+    .summary-section {
+        margin-bottom: 15px;
+    }
+
+    .summary-section p {
+        margin: 5px 0;
+    }
+
+    .class-mapping {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .class-card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        flex: 1;
+        min-width: 200px;
+        transition: transform 0.2s;
+    }
+
+    .class-card:hover {
+        transform: translateY(-3px);
+    }
+
+    .class-card.match {
+        border-left: 4px solid #2ecc71;
+    }
+
+    .class-card.no-match {
+        border-left: 4px solid #e74c3c;
+    }
+
+    .class-card h5 {
+        margin: 0 0 10px;
+        font-size: 16px;
+        color: #333;
+    }
+
+    .class-card p {
+        margin: 5px 0;
+        font-size: 14px;
+    }
+
+    .class-card .status {
+        font-weight: bold;
+    }
+
+    .class-suggestions {
+        background-color: #3498db4b;
+        margin-top: 10px;
+    }
+
+    /* 数据集选择器样式 */
+    .import-method-selector {
+        margin-top: 15px;
+    }
+
+    .method-tabs {
+        display: flex;
+        border-bottom: 2px solid #e1e1e1;
+        margin-bottom: 20px;
+    }
+
+    .method-tab {
+        flex: 1;
+        padding: 12px 20px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        color: #666;
+        border-bottom: 3px solid transparent;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .method-tab:hover {
+        background: #f8f9fa;
+        color: #333;
+    }
+
+    .method-tab.active {
+        color: #3498db;
+        border-bottom-color: #3498db;
+        background: #f8f9fa;
+    }
+
+    .import-method-content {
+        display: none;
+    }
+
+    .import-method-content.active {
+        display: block;
+    }
+
+    .dataset-selector-wrapper {
+        border: 1px solid #e1e1e1;
+        border-radius: 8px;
+        padding: 20px;
+        background: #f8f9fa;
+    }
+
+    .project-dataset-selector {
+        min-height: 300px;
+    }
+
+    .project-dataset-selector .loading {
+        text-align: center;
+        color: #666;
+        padding: 40px;
+    }
+
+    /* 为数据集选择器定制样式 */
+    .project-dataset-selector .dataset-selector {
+        border: none;
+        background: transparent;
+    }
+
+    .project-dataset-selector .selector-header {
+        padding: 0 0 15px 0;
+        border-bottom: 1px solid #e1e1e1;
+        margin-bottom: 15px;
+    }
+
+    .project-dataset-selector .selector-header h3 {
+        font-size: 18px;
+        margin: 0;
+    }
+
+    .project-dataset-selector .selector-search-input {
+        width: 250px;
+    }
+
+    .project-dataset-selector .selector-content {
+        max-height: 350px;
+    }
+
+    .project-dataset-selector .selector-footer {
+        padding: 15px 0 0 0;
+        border-top: 1px solid #e1e1e1;
+        margin-top: 15px;
+    }
+
+    .project-dataset-selector .selector-dataset-item {
+        margin-bottom: 12px;
+        padding: 12px;
+        border-radius: 6px;
+    }
+
+    .project-dataset-selector .selector-dataset-item:hover {
+        transform: none;
+    }
+
+    .project-dataset-selector .selector-empty-state {
+        padding: 40px 20px;
+    }
+
+    .project-dataset-selector .btn {
+        padding: 8px 16px;
+        font-size: 14px;
+    }
+
+    #class-search {
+        width: 50%;
+        background-color: #6cb0dd3b;
+        height: auto;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-bottom: 10px;
+    }
+
+    .class-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .class-tag {
+        background: #f0f0f0;
+        padding: 6px 12px;
+        border-radius: 12px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+    }
+
+    .class-tag:hover {
+        background: #e0e0e0;
+    }
+
+    .class-tag.selected {
+        background: #3498db;
+        color: #fff;
+    }
+
+    .class-tag.selected:hover {
+        background: #2980b9;
+    }
+
+    #overview-modal .modal-content {
+        width: 80%;
+        max-width: 1000px;
+    }
+
+    #image-stats,
+    #class-distribution,
+    #annotations-per-image {
+        width: 100%;
+        height: 400px;
+    }
+
+    #overview-metrics .metric-card {
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 14px 16px;
+    }
+
+    #overview-metrics .metric-label {
+        font-size: 12px;
+        color: #6b7280;
+        margin-bottom: 6px;
+    }
+
+    #overview-metrics .metric-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #111827;
+    }
+
+    .overview-volume-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        background: #fff;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .overview-volume-table th,
+    .overview-volume-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #eef2f7;
+        text-align: left;
+    }
+
+    .overview-volume-table th {
+        background: #f8fafc;
+        color: #374151;
+        font-weight: 600;
+    }
+
+    .tab-btn.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* 类别管理模态框样式 */
+    #classes-modal .modal-content {
+        width: 500px;
+        max-width: 90%;
+    }
+
+    .add-class-section {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .add-class-section input {
+        flex: 1;
+        padding: 10px 15px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .add-class-section input:focus {
+        outline: none;
+        border-color: #3498db;
+    }
+
+    .classes-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        min-height: 100px;
+        max-height: 300px;
+        overflow-y: auto;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+
+    .class-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #fff;
+        padding: 8px 12px;
+        border-radius: 20px;
+        border: 1px solid #e0e0e0;
+        font-size: 14px;
+    }
+
+    .class-item .class-name {
+        font-weight: 500;
+    }
+
+    .class-item .class-count {
+        color: #666;
+        font-size: 12px;
+    }
+
+    .class-item .delete-class-btn {
+        background: none;
+        border: none;
+        color: #999;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 0 4px;
+        transition: color 0.2s;
+    }
+
+    .class-item .delete-class-btn:hover {
+        color: #e74c3c;
+    }
+
+    .class-delete-confirm {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.95);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+    }
+
+    .confirm-content {
+        text-align: center;
+        padding: 20px;
+    }
+
+    .confirm-content p {
+        margin-bottom: 20px;
+        font-size: 14px;
+    }
+
+    .confirm-buttons {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    .danger-btn {
+        background: linear-gradient(45deg, #e74c3c, #c0392b) !important;
+    }
+
+    .danger-btn:hover {
+        background: linear-gradient(45deg, #c0392b, #a93226) !important;
+    }
+
+    .classes-list .loading {
+        width: 100%;
+        text-align: center;
+        color: #666;
+        padding: 20px;
+    }
+
+    .classes-list .no-classes {
+        width: 100%;
+        text-align: center;
+        color: #999;
+        padding: 20px;
+    }
+
+    /* 任务分配弹窗样式 */
+    .assign-modal-content {
+        width: 90%;
+        max-width: 1200px;
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+
+    .assign-container {
+        display: flex;
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .assign-images-section {
+        flex: 2;
+        min-width: 0;
+    }
+
+    .assign-annotators-section {
+        flex: 1;
+        min-width: 250px;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .section-header h3 {
+        margin: 0;
+        font-size: 16px;
+    }
+
+    .select-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .small-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .small-btn:hover {
+        background: #f0f0f0;
+    }
+
+    .filter-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .filter-bar select {
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    #image-count {
+        font-size: 13px;
+        color: #666;
+    }
+
+    .assign-images-list {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 10px;
+        max-height: 400px;
+        overflow-y: auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 10px;
+    }
+
+    .image-item {
+        position: relative;
+        border: 2px solid transparent;
+        border-radius: 6px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .image-item:hover {
+        border-color: #3498db;
+    }
+
+    .image-item.selected {
+        border-color: #3498db;
+        box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
+    }
+
+    .image-item.assigned {
+        opacity: 0.7;
+    }
+
+    .image-item img {
+        width: 100%;
+        height: 80px;
+        object-fit: cover;
+    }
+
+    .image-item .image-name {
+        font-size: 10px;
+        padding: 4px;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    .image-item .assigned-badge {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        background: #27ae60;
+        color: white;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 10px;
+    }
+
+    .annotators-list {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 10px;
+        max-height: 220px;
+        /* Approx 3 items height */
+        overflow-y: auto;
+    }
+
+    .annotator-stats-list {
+        max-height: 150px;
+        /* Approx 3 stats items */
+        overflow-y: auto;
+        padding-right: 5px;
+        /* Prevent scrollbar overlapping content */
+    }
+
+    .annotator-item {
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .annotator-item:hover {
+        background: #f8f9fa;
+    }
+
+    .annotator-item.selected {
+        background: #e3f2fd;
+        border-color: #3498db;
+    }
+
+    .annotator-item input[type="radio"] {
+        margin-right: 10px;
+    }
+
+    .annotator-info {
+        flex: 1;
+    }
+
+    .annotator-name {
+        font-weight: 500;
+    }
+
+    .annotator-email {
+        font-size: 12px;
+        color: #666;
+    }
+
+    .assign-actions {
+        margin-top: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .auto-btn {
+        background: linear-gradient(45deg, #9b59b6, #8e44ad) !important;
+    }
+
+    .auto-btn:hover {
+        background: linear-gradient(45deg, #8e44ad, #7d3c98) !important;
+    }
+
+    .assign-stats {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-label {
+        display: block;
+        font-size: 12px;
+        color: #666;
+    }
+
+    .stat-value {
+        display: block;
+        font-size: 24px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    /* 用户管理弹窗样式 */
+    .users-modal-content {
+        width: 90%;
+        max-width: 900px;
+    }
+
+    .users-table-container {
+        max-height: 500px;
+        overflow-y: auto;
+        margin-top: 20px;
+    }
+
+    .users-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .users-table th,
+    .users-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .users-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+    }
+
+    .users-table tr:hover {
+        background: #f8f9fa;
+    }
+
+    .role-select {
+        padding: 4px 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .status-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .status-badge.active {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-badge.inactive {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .user-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .user-actions button {
+        padding: 4px 8px;
+        font-size: 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .toggle-btn {
+        background: #ffc107;
+        color: #333;
+    }
+
+    .toggle-btn:hover {
+        background: #e0a800;
+    }
+
+    .delete-user-btn {
+        background: #dc3545;
+        color: white;
+    }
+
+    .delete-user-btn:hover {
+        background: #c82333;
+    }
+
+    .no-annotators {
+        text-align: center;
+        color: #666;
+        padding: 20px;
+    }
+</style>
+
+<script type="module">
+    import { initDropZone, initImportModal, getStoredUploadId, clearStoredData } from '/static/js/importHandler.js';
+    import { showLoadingOverlay, hideLoadingOverlay } from '/static/js/spinnerLoader.js';
+
+    const modal = document.querySelector('.modal');
+    const createBtn = document.querySelector('.header .create-btn');
+    const closeBtn = document.querySelector('.close-btn');
+    const projectForm = document.getElementById('project-form');
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const progressContainer = document.getElementById('progress-container');
+    const createProjectBtn = document.querySelector('#project-form .create-btn');
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const setupBtns = document.querySelectorAll('.setup-btn');
+    const setupInput = document.getElementById('setup-type');
+    const nextBtns = document.querySelectorAll('.next-btn');
+    const importModalElement = document.getElementById('import-modal');
+    const importForm = document.getElementById('import-form');
+    const importProgressContainer = document.getElementById('import-progress-container');
+    const importSubmitBtn = importForm.querySelector('.create-btn');
+    const overviewModal = document.getElementById('overview-modal');
+    const overviewCloseBtn = document.querySelector('.overview-close-btn');
+    let currentImportProject = null;
+    let deleteProjectName = null;
+    let isDataImported = false;
+
+    let projectClasses = '';
+    const classNamesInput = document.getElementById('class-names');
+    const classSearch = document.getElementById('class-search');
+    const classTags = document.getElementById('class-tags');
+    const projectNameInput = document.getElementById('project-name');
+
+    // 肺结节诊断特征分类征象 (COCO classes replaced)
+    const cocoClasses = [
+        '__background__', '边界清但不光滑', '边缘模糊', '分叶', '浅分叶', '毛刺', '短毛刺', '空泡', '厚壁空洞', '薄壁空洞',
+        '支气管闭塞', '血管穿行', '胸膜牵拉', '胸膜凹陷', '血管集束', '淋巴结肿大', '含钙化成分', '含脂肪成分', '血管贴边征', '桃尖征',
+        '棘状突起', '刀切征', '空气支气管征', '空气新月征', '反晕征', '卫星征'
+    ];
+
+    // Initialize class tags
+    function renderClassTags(filter = '') {
+        classTags.innerHTML = '';
+        // Normalize current classes for comparison (trim and lowercase)
+        const currentClasses = classNamesInput.value
+            .split(/[,.;]\s*/)
+            .map(c => c.trim().toLowerCase())
+            .filter(c => c);
+        const filteredClasses = cocoClasses.filter(c => c.toLowerCase().includes(filter.toLowerCase()) && c !== '__background__');
+        filteredClasses.forEach(cls => {
+            const tag = document.createElement('span');
+            // Check if the class is in currentClasses (case-insensitive)
+            const isSelected = currentClasses.includes(cls.toLowerCase());
+            tag.className = `class-tag ${isSelected ? 'selected' : ''}`;
+            tag.textContent = cls;
+            tag.addEventListener('click', () => {
+                let updatedClasses = classNamesInput.value
+                    .split(/[,.;]\s*/)
+                    .filter(c => c.trim());
+                const clsLower = cls.toLowerCase();
+                const index = updatedClasses.findIndex(c => c.trim().toLowerCase() === clsLower);
+                if (index !== -1) {
+                    // Remove the class
+                    updatedClasses.splice(index, 1);
+                } else {
+                    // Add the class
+                    updatedClasses.push(cls);
+                }
+                classNamesInput.value = updatedClasses.join(', ');
+                projectClasses = classNamesInput.value;
+                renderClassTags(classSearch.value); // Re-render with current filter
+            });
+            classTags.appendChild(tag);
+        });
+    }
+
+    // Search filter for class tags
+    classSearch.addEventListener('input', () => {
+        renderClassTags(classSearch.value);
+    });
+
+    // Update project classes on input
+    classNamesInput.addEventListener('input', () => {
+        projectClasses = classNamesInput.value;
+        renderClassTags(classSearch.value); // Update tags to reflect manual input
+    });
+
+    // Initial render of class tags
+    renderClassTags();
+
+    // Initialize drop zones
+    initDropZone(
+        dropZone,
+        fileInput,
+        document.getElementById('file-list'),
+        dropZone.querySelector('.drop-icon'),
+        document.getElementById('compress-message'),
+        progressContainer,
+        createProjectBtn,
+        false
+    );
+
+    const importModal = initImportModal(
+        importModalElement,
+        importForm,
+        document.getElementById('import-drop-zone'),
+        document.getElementById('import-file-input'),
+        document.getElementById('import-file-list'),
+        document.querySelector('.import-close-btn'),
+        document.getElementById('import-compress-message'),
+        importProgressContainer,
+        importSubmitBtn,
+        false
+    );
+
+    createBtn.addEventListener('click', async () => {
+        modal.style.display = 'flex';
+        createProjectBtn.disabled = false;
+        isDataImported = false;
+        document.getElementById('summary-tab').classList.add('disabled');
+        try {
+            const response = await fetch('/get_unique_project_name');
+            const result = await response.json();
+            if (result.success) {
+                projectNameInput.value = result.project_name;
+            } else {
+                console.error('Failed to fetch unique project name:', result.error);
+                projectNameInput.value = '#VisioFirm';
+            }
+        } catch (error) {
+            console.error('Error fetching unique project name:', error);
+            projectNameInput.value = '#VisioFirm';
+        }
+    });
+
+    const deleteModal = document.getElementById('delete-confirm-modal');
+    const deleteMessage = document.getElementById('delete-message');
+    const confirmDeleteBtn = document.getElementById('confirm-delete');
+    const cancelDeleteBtns = [
+        document.getElementById('cancel-delete'),
+        document.getElementById('cancel-delete-footer')
+    ];
+
+    closeBtn.addEventListener('click', async () => {
+        modal.style.display = 'none';
+        projectForm.reset();
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
+        document.querySelector('.tab-btn[data-tab="settings"]').classList.add('active');
+        document.getElementById('settings').classList.add('active');
+        setupBtns.forEach(b => b.classList.remove('selected'));
+        setupInput.value = '';
+        progressContainer.innerHTML = '';
+        document.getElementById('file-list').style.display = 'none';
+        document.getElementById('file-list').innerHTML = '';
+        createProjectBtn.disabled = true;
+        isDataImported = false;
+        document.getElementById('summary-tab').classList.add('disabled');
+        clearStoredData();
+        await fetch('/cleanup_chunks', { method: 'POST' });
+    });
+
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            if (btn.classList.contains('disabled')) {
+                e.preventDefault();
+                return;
+            }
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(btn.dataset.tab).classList.add('active');
+        });
+    });
+
+    setupBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            setupBtns.forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            setupInput.value = btn.dataset.type;
+        });
+    });
+
+    nextBtns.forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const nextTab = btn.dataset.nextTab;
+            if (nextTab === 'setup') {
+                const projectName = document.getElementById('project-name').value;
+                if (!projectName) {
+                    alert('Project name is required');
+                    return;
+                }
+            } else if (nextTab === 'import') {
+                if (!setupInput.value) {
+                    alert('Please select a setup type');
+                    return;
+                }
+            } else if (nextTab === 'summary') {
+                const uploadId = getStoredUploadId();
+                if (!uploadId) {
+                    alert('Please upload files first');
+                    return;
+                }
+                try {
+                    const classNames = document.getElementById('class-names').value;
+                    if (!classNames) {
+                        alert('Please enter class names');
+                        return;
+                    }
+                    document.getElementById('loading-waiter').style.display = 'flex';
+                    const response = await fetch('/parse_annotations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({
+                            upload_id: uploadId,
+                            class_names: classNames
+                        })
+                    });
+                    const result = await response.json();
+                    document.getElementById('loading-waiter').style.display = 'none';
+                    if (result.success) {
+                        isDataImported = true;
+                        document.getElementById('summary-tab').classList.remove('disabled');
+                        displaySummary(result.summary);
+                        tabBtns.forEach(b => b.classList.remove('active'));
+                        tabContents.forEach(c => c.classList.remove('active'));
+                        document.querySelector('.tab-btn[data-tab="summary"]').classList.add('active');
+                        document.getElementById('summary').classList.add('active');
+                    } else {
+                        alert(result.error);
+                    }
+                } catch (error) {
+                    console.error('Error parsing annotations:', error);
+                    document.getElementById('loading-waiter').style.display = 'none';
+                    alert('Failed to parse annotations');
+                }
+                return;
+            }
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab-btn[data-tab="${nextTab}"]`).classList.add('active');
+            document.getElementById(nextTab).classList.add('active');
+        });
+    });
+
+    function displaySummary(summary) {
+        const summaryDiv = document.getElementById('annotation-summary');
+        summaryDiv.innerHTML = '';
+
+        const filesSection = document.createElement('div');
+        filesSection.className = 'summary-section';
+        if (summary.coco_files.length > 0) {
+            filesSection.innerHTML += `<p><strong>COCO Annotations:</strong> ${summary.coco_files.join(', ')}</p>`;
+        }
+        if (summary.yolo_files.length > 0) {
+            filesSection.innerHTML += `<p><strong>YOLO Annotations:</strong> ${summary.yolo_files.join(', ')}</p>`;
+        }
+        filesSection.innerHTML += `<p><strong>Annotated Images:</strong> ${summary.annotated_images}</p>`;
+        summaryDiv.appendChild(filesSection);
+
+        const mappingSection = document.createElement('div');
+        mappingSection.className = 'summary-section';
+        mappingSection.innerHTML = '<h4>Class Mapping</h4>';
+        const mappingContainer = document.createElement('div');
+        mappingContainer.className = 'class-mapping';
+        for (const [annoClass, projectClass] of Object.entries(summary.class_mapping)) {
+            const card = document.createElement('div');
+            card.className = `class-card ${projectClass ? 'match' : 'no-match'}`;
+            card.innerHTML = `
+                <h5>${annoClass}</h5>
+                <p>Mapped to: <span class="status">${projectClass || 'No match'}</span></p>
+            `;
+            mappingContainer.appendChild(card);
+        }
+        mappingSection.appendChild(mappingContainer);
+        summaryDiv.appendChild(mappingSection);
+    }
+
+    projectForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!setupInput.value) {
+            alert('Please select a setup type');
+            return;
+        }
+        const uploadId = getStoredUploadId();
+        if (!uploadId) {
+            alert('Please import at least one image to create a project');
+            return;
+        }
+
+        try {
+            createProjectBtn.style.display = 'none';
+            showLoadingOverlay('Creating project...');
+
+            const formData = new FormData();
+            formData.append('project_name', document.getElementById('project-name').value);
+            formData.append('description', document.getElementById('description').value);
+            formData.append('setup_type', setupInput.value);
+            formData.append('class_names', document.getElementById('class-names').value);
+            formData.append('upload_id', uploadId);
+
+            const response = await fetch('/create_project', {
+                method: 'POST',
+                body: formData
+            });
+
+            const responseText = await response.text();
+            try {
+                const result = JSON.parse(responseText);
+                if (result.success) {
+                    progressContainer.innerHTML = '<p>Project created!</p>';
+                    setTimeout(() => {
+                        modal.style.display = 'none';
+                        location.reload();
+                    }, 1000);
+                } else {
+                    alert(result.error || 'Failed to create project');
+                    progressContainer.innerHTML = '';
+                    document.getElementById('file-list').style.display = 'none';
+                    document.getElementById('file-list').innerHTML = '';
+                    createProjectBtn.disabled = true;
+                }
+            } catch (jsonError) {
+                console.error('JSON Parse Error:', jsonError);
+                alert('Server returned invalid JSON response');
+            }
+        } catch (error) {
+            console.error('Fetch Error:', error);
+            alert(`Project creation failed: ${error.message}`);
+            progressContainer.innerHTML = '';
+            document.getElementById('file-list').style.display = 'none';
+            document.getElementById('file-list').innerHTML = '';
+            createProjectBtn.disabled = true;
+        } finally {
+            createProjectBtn.style.display = 'block';
+            hideLoadingOverlay();
+            clearStoredData();
+        }
+    });
+
+    document.querySelectorAll('.import-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentImportProject = btn.dataset.project;
+            document.getElementById('import-project-name').textContent = currentImportProject;
+            importModalElement.style.display = 'flex';
+            importModal.reset();
+            importSubmitBtn.disabled = true;
+        });
+    });
+
+    importForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!currentImportProject) {
+            alert('No project selected');
+            return;
+        }
+        const uploadId = importModal.getStoredUploadId();
+        if (!uploadId) {
+            alert('Please select at least one image to import');
+            return;
+        }
+
+        try {
+            document.getElementById('import-loading-waiter').style.display = 'flex';
+            const formData = new FormData();
+            formData.append('project_name', currentImportProject);
+            formData.append('upload_id', uploadId);
+
+            const response = await fetch('/import_images', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            document.getElementById('import-loading-waiter').style.display = 'none';
+            if (result.success) {
+                importProgressContainer.innerHTML = '<p>Upload complete!</p>';
+                setTimeout(() => {
+                    importModalElement.style.display = 'none';
+                    location.reload();
+                }, 1000);
+            } else {
+                alert(result.error || 'Failed to import images');
+                importProgressContainer.innerHTML = '';
+                document.getElementById('import-file-list').innerHTML = '';
+                document.getElementById('import-file-list').style.display = 'none';
+                document.getElementById('import-drop-zone').querySelector('.drop-icon').classList.remove('loaded');
+                document.getElementById('import-compress-message').style.display = 'none';
+                importSubmitBtn.disabled = true;
+            }
+        } catch (error) {
+            console.error('Import error:', error);
+            document.getElementById('import-loading-waiter').style.display = 'none';
+            alert('Failed to import images: ' + error.message);
+            importProgressContainer.innerHTML = '';
+            document.getElementById('import-file-list').innerHTML = '';
+            document.getElementById('import-file-list').style.display = 'none';
+            document.getElementById('import-drop-zone').querySelector('.drop-icon').classList.remove('loaded');
+            document.getElementById('import-compress-message').style.display = 'none';
+            importSubmitBtn.disabled = true;
+        }
+    });
+
+    // Close all menus helper
+    function closeAllMenus() {
+        document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+            dropdown.style.display = 'none';
+        });
+        // Remove menu-open class from all project cards
+        document.querySelectorAll('.project-card.menu-open').forEach(card => {
+            card.classList.remove('menu-open');
+        });
+    }
+
+    document.querySelectorAll('.menu-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            console.log('Menu button clicked:', btn.id);
+            e.preventDefault();
+            e.stopPropagation();
+
+            const targetId = btn.dataset.target;
+            const dropdown = document.getElementById(targetId);
+            const projectCard = btn.closest('.project-card');
+
+            if (!dropdown) {
+                console.error('Dropdown not found for:', targetId);
+                return;
+            }
+
+            const isVisible = dropdown.style.display === 'block';
+            console.log('Toggling menu:', targetId, 'Current visibility:', isVisible);
+
+            // Close all other menus first
+            closeAllMenus();
+
+            // Toggle current menu
+            if (!isVisible) {
+                dropdown.style.display = 'block';
+                // Add menu-open class to elevate z-index
+                if (projectCard) {
+                    projectCard.classList.add('menu-open');
+                }
+                console.log('Menu opened');
+            } else {
+                console.log('Menu closed');
+            }
+        });
+    });
+
+    // Global click listener to close menus when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.menu-dropdown') && !e.target.closest('.menu-btn')) {
+            closeAllMenus();
+        }
+    });
+
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const card = btn.closest('.project-card');
+            const projectName = btn.dataset.project;
+            const imageCount = card.querySelectorAll('.project-images img, .project-images video').length;
+
+            deleteProjectName = projectName;
+            deleteMessage.textContent = `Are you sure you want to delete project "${projectName}" ?`;
+            deleteModal.style.display = 'flex';
+        });
+    });
+
+    document.querySelectorAll('.overview-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const projectName = btn.dataset.project;
+            document.getElementById('overview-project-name').textContent = projectName;
+            overviewModal.style.display = 'flex';
+
+            try {
+                const response = await fetch(`/get_project_overview/${projectName}`);
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                const totalLabel = document.getElementById('total-images');
+                const noteEl = document.getElementById('overview-note');
+                const metricsEl = document.getElementById('overview-metrics');
+                const volumeTableEl = document.getElementById('overview-volume-table');
+                document.getElementById('total-images-count').textContent = data.total_images;
+                totalLabel.firstChild.textContent = (data.title_label || '总图片数') + '：';
+                noteEl.textContent = data.statistics_note || '';
+
+                if (Array.isArray(data.overview_metrics) && data.overview_metrics.length > 0) {
+                    metricsEl.innerHTML = data.overview_metrics.map(item => `
+                        <div class="metric-card">
+                            <div class="metric-label">${item.label}</div>
+                            <div class="metric-value">${item.value}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    metricsEl.innerHTML = '';
+                }
+
+                if (data.is_ct && Array.isArray(data.volume_table) && data.volume_table.length > 0) {
+                    volumeTableEl.innerHTML = `
+                        <h3 style="margin:0 0 10px 0;">CT 明细</h3>
+                        <table class="overview-volume-table">
+                            <thead>
+                                <tr>
+                                    <th>CT 名称</th>
+                                    <th>已保存</th>
+                                    <th>掩码</th>
+                                    <th>CSV</th>
+                                    <th>病灶数</th>
+                                    <th>统计来源</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.volume_table.map(row => `
+                                    <tr>
+                                        <td>${row.name}</td>
+                                        <td>${row.reviewed ? '是' : '否'}</td>
+                                        <td>${row.has_mask ? '是' : '否'}</td>
+                                        <td>${row.has_csv ? '是' : '否'}</td>
+                                        <td>${row.finding_count}</td>
+                                        <td>${row.source}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    volumeTableEl.innerHTML = '';
+                }
+
+                const pieLabels = data.completion_chart?.labels || (data.is_ct ? ['已完成 CT', '未完成 CT'] : ['Annotated', 'Non-annotated']);
+                const pieValues = data.completion_chart?.values || [data.annotated_images, data.non_annotated_images];
+                const pieTitle = data.completion_chart?.title || (data.is_ct ? 'CT 任务完成状态' : 'Image Annotation Status');
+                const barTitle = data.ct_charts?.class_title || (data.is_ct ? 'CT 类别分布' : 'Class Distribution');
+                const histTitle = data.ct_charts?.hist_title || (data.is_ct ? '每个 CT 的标注数量' : 'Annotations per Image');
+                const histXAxis = data.ct_charts?.hist_x_title || (data.is_ct ? '标注数量' : 'Number of Annotations');
+                const histYAxis = data.ct_charts?.hist_y_title || (data.is_ct ? 'CT 数量' : 'Number of Images');
+
+                if (data.total_images === 0) {
+                    document.getElementById('image-stats').innerHTML = data.is_ct ? '<p>该项目中暂无 CT 数据。</p>' : '<p>No images in this project.</p>';
+                } else {
+                    var pieData = [{
+                        values: pieValues,
+                        labels: pieLabels,
+                        type: 'pie'
+                    }];
+                    var pieLayout = { title: pieTitle };
+                    Plotly.newPlot('image-stats', pieData, pieLayout);
+                }
+
+                if (Object.keys(data.class_distribution).length === 0) {
+                    document.getElementById('class-distribution').innerHTML = data.is_ct ? '<p>该项目中暂无类别统计。</p>' : '<p>No annotations in this project.</p>';
+                } else {
+                    var barData = [{
+                        x: Object.keys(data.class_distribution),
+                        y: Object.values(data.class_distribution),
+                        type: 'bar'
+                    }];
+                    var barLayout = {
+                        title: barTitle,
+                        xaxis: { title: data.ct_charts?.class_x_title || 'Classes' },
+                        yaxis: { title: data.ct_charts?.class_y_title || 'Number of Annotations' }
+                    };
+                    Plotly.newPlot('class-distribution', barData, barLayout);
+                }
+
+                if (data.annotations_per_image.length === 0) {
+                    document.getElementById('annotations-per-image').innerHTML = data.is_ct ? '<p>该项目中暂无 CT 标注统计。</p>' : '<p>No annotations in this project.</p>';
+                } else {
+                    var histData = [{
+                        x: data.annotations_per_image,
+                        type: 'histogram'
+                    }];
+                    var histLayout = {
+                        title: histTitle,
+                        xaxis: { title: histXAxis },
+                        yaxis: { title: histYAxis }
+                    };
+                    Plotly.newPlot('annotations-per-image', histData, histLayout);
+                }
+            } catch (error) {
+                console.error('Error fetching overview data:', error);
+                alert('Failed to load project overview');
+            }
+        });
+    });
+
+    document.querySelectorAll('.project-card').forEach(card => {
+        card.addEventListener('click', async (e) => {
+            if (e.target.closest('.menu-btn, .menu-dropdown, .overview-btn, .import-btn, .delete-btn, .action-btn')) {
+                return;
+            }
+
+            const projectName = card.dataset.project;
+            const setupType = card.dataset.setupType || '';
+            showLoadingOverlay(`Loading ${projectName}...`);
+
+            try {
+                // Add a small delay to ensure spinner is shown
+                await new Promise(resolve => setTimeout(resolve, 100));
+                if (setupType.includes('CT')) {
+                    window.location.href = `/ct/${projectName}`;
+                } else {
+                    window.location.href = `/annotation/${projectName}`;
+                }
+            } catch (error) {
+                hideLoadingOverlay();
+                console.error('Navigation error:', error);
+            }
+        });
+    });
+
+    // Add this cleanup on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        hideLoadingOverlay();
+    });
+
+    // Toggle menu function
+    function toggleMenu(event, projectName) {
+        event.stopPropagation();
+        const menu = document.getElementById('menu-' + projectName);
+        const isVisible = menu.style.display === 'block';
+
+        // Hide all other menus
+        document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+            dropdown.style.display = 'none';
+        });
+
+        // Toggle current menu
+        menu.style.display = isVisible ? 'none' : 'block';
+    }
+
+    // Make toggleMenu globally available
+    window.toggleMenu = toggleMenu;
+
+    overviewCloseBtn.addEventListener('click', () => {
+        overviewModal.style.display = 'none';
+    });
+
+    document.addEventListener('click', (e) => {
+        document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+            if (!dropdown.contains(e.target) && !e.target.classList.contains('menu-btn')) {
+                dropdown.style.display = 'none';
+            }
+        });
+    });
+
+    confirmDeleteBtn.addEventListener('click', async () => {
+        if (!deleteProjectName) return;
+        const response = await fetch(`/delete_project/${deleteProjectName}`, { method: 'POST' });
+        const result = await response.json();
+        if (result.success) {
+            location.reload();
+        } else {
+            alert(result.error);
+        }
+    });
+
+    cancelDeleteBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            deleteModal.style.display = 'none';
+            deleteProjectName = null;
+        });
+    });
+</script>
+
+<script src="{{ url_for('static', filename='js/datasetSelector.js') }}"></script>
+<script>
+    // 全局项目数据集选择器实例
+    let projectDatasetSelector;
+
+    /**
+     * 切换导入方式
+     */
+    function switchImportMethod(method) {
+        // 切换标签页状态
+        document.querySelectorAll('.method-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelector(`[data-method="${method}"]`).classList.add('active');
+
+        // 切换内容区域
+        document.querySelectorAll('.import-method-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(`${method}-content`).classList.add('active');
+
+        // 如果切换到数据集选择，初始化选择器
+        if (method === 'dataset' && !projectDatasetSelector) {
+            initializeProjectDatasetSelector();
+        }
+    }
+
+    /**
+     * 初始化项目数据集选择器
+     */
+    async function initializeProjectDatasetSelector() {
+        try {
+            projectDatasetSelector = new DatasetSelector({
+                multiSelect: true,
+                onSelectionChange: (selectedDatasets) => {
+                    updateSelectedDatasetsInput(selectedDatasets);
+                },
+                onConfirm: (selectedDatasets) => {
+                    console.log('已选择数据集:', selectedDatasets);
+                    // 这里可以添加确认选择后的处理逻辑
+                }
+            });
+
+            const success = await projectDatasetSelector.initialize('projectDatasetSelector');
+            if (!success) {
+                console.error('初始化数据集选择器失败');
+            }
+        } catch (error) {
+            console.error('初始化数据集选择器错误:', error);
+        }
+    }
+
+    /**
+     * 更新隐藏的数据集选择输入字段
+     */
+    function updateSelectedDatasetsInput(selectedDatasets) {
+        const input = document.getElementById('selected-datasets');
+        if (input) {
+            const datasetIds = selectedDatasets.map(ds => ds.dataset_id);
+            input.value = JSON.stringify(datasetIds);
+        }
+    }
+
+    /**
+     * 获取当前选择的导入方式
+     */
+    function getCurrentImportMethod() {
+        const activeTab = document.querySelector('.method-tab.active');
+        return activeTab ? activeTab.dataset.method : 'upload';
+    }
+
+    /**
+     * 验证数据导入
+     */
+    function validateDataImport() {
+        const method = getCurrentImportMethod();
+
+        if (method === 'upload') {
+            // 验证文件上传
+            const uploadId = getStoredUploadId();
+            return uploadId !== null;
+        } else if (method === 'dataset') {
+            // 验证数据集选择
+            const selectedDatasets = document.getElementById('selected-datasets').value;
+            return selectedDatasets && selectedDatasets !== '[]';
+        }
+
+        return false;
+    }
+
+    // ==================== 类别管理功能 ====================
+
+    const classesModal = document.getElementById('classes-modal');
+    const classesCloseBtn = document.querySelector('.classes-close-btn');
+    const classesProjectName = document.getElementById('classes-project-name');
+    const classesList = document.getElementById('classes-list');
+    const newClassInput = document.getElementById('new-class-input');
+    const addClassBtn = document.getElementById('add-class-btn');
+    const classDeleteConfirm = document.getElementById('class-delete-confirm');
+    const classDeleteMessage = document.getElementById('class-delete-message');
+    const confirmClassDeleteBtn = document.getElementById('confirm-class-delete');
+    const cancelClassDeleteBtn = document.getElementById('cancel-class-delete');
+
+    let currentClassesProject = null;
+    let classToDelete = null;
+
+    // 打开类别管理模态框
+    document.querySelectorAll('.manage-classes-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const projectName = btn.dataset.project;
+            currentClassesProject = projectName;
+            classesProjectName.textContent = projectName;
+            classesModal.style.display = 'flex';
+
+            // 隐藏所有下拉菜单
+            document.querySelectorAll('.menu-dropdown').forEach(d => d.style.display = 'none');
+
+            // 加载类别
+            await loadProjectClasses(projectName);
+        });
+    });
+
+    // 关闭类别管理模态框
+    classesCloseBtn.addEventListener('click', () => {
+        classesModal.style.display = 'none';
+        currentClassesProject = null;
+        classDeleteConfirm.style.display = 'none';
+    });
+
+    // 加载项目类别
+    async function loadProjectClasses(projectName) {
+        classesList.innerHTML = '<div class="loading">正在加载类别...</div>';
+
+        try {
+            const response = await fetch(`/get_project_classes/${encodeURIComponent(projectName)}`);
+            const result = await response.json();
+
+            if (result.success) {
+                if (result.classes.length === 0) {
+                    classesList.innerHTML = '<div class="no-classes">暂无类别，请添加新类别</div>';
+                } else {
+                    classesList.innerHTML = '';
+                    result.classes.forEach(cls => {
+                        const classItem = document.createElement('div');
+                        classItem.className = 'class-item';
+                        classItem.innerHTML = `
+                            <span class="class-name">${cls.name}</span>
+                            <span class="class-count">(${cls.annotation_count})</span>
+                            <button class="delete-class-btn" data-class="${cls.name}" data-count="${cls.annotation_count}">×</button>
+                        `;
+                        classesList.appendChild(classItem);
+                    });
+
+                    // 绑定删除按钮事件
+                    classesList.querySelectorAll('.delete-class-btn').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            const className = btn.dataset.class;
+                            const count = parseInt(btn.dataset.count);
+                            showDeleteConfirm(className, count);
+                        });
+                    });
+                }
+            } else {
+                classesList.innerHTML = `<div class="loading">加载失败: ${result.error}</div>`;
+            }
+        } catch (error) {
+            classesList.innerHTML = `<div class="loading">加载失败: ${error.message}</div>`;
+        }
+    }
+
+    // 显示删除确认
+    function showDeleteConfirm(className, annotationCount) {
+        classToDelete = className;
+        if (annotationCount > 0) {
+            classDeleteMessage.innerHTML = `
+                确定要删除类别 "<strong>${className}</strong>" 吗？<br>
+                <span style="color: #e74c3c;">⚠️ 这将同时删除 ${annotationCount} 条使用该类别的标注数据！</span>
+            `;
+        } else {
+            classDeleteMessage.innerHTML = `确定要删除类别 "<strong>${className}</strong>" 吗？`;
+        }
+        classDeleteConfirm.style.display = 'flex';
+    }
+
+    // 取消删除
+    cancelClassDeleteBtn.addEventListener('click', () => {
+        classDeleteConfirm.style.display = 'none';
+        classToDelete = null;
+    });
+
+    // 确认删除
+    confirmClassDeleteBtn.addEventListener('click', async () => {
+        if (!classToDelete || !currentClassesProject) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('class_name', classToDelete);
+
+            const response = await fetch(`/delete_project_class/${encodeURIComponent(currentClassesProject)}`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                classDeleteConfirm.style.display = 'none';
+                classToDelete = null;
+                await loadProjectClasses(currentClassesProject);
+            } else {
+                alert('删除失败: ' + result.error);
+            }
+        } catch (error) {
+            alert('删除失败: ' + error.message);
+        }
+    });
+
+    // 添加新类别
+    addClassBtn.addEventListener('click', async () => {
+        const className = newClassInput.value.trim();
+        if (!className || !currentClassesProject) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('class_name', className);
+
+            const response = await fetch(`/add_project_class/${encodeURIComponent(currentClassesProject)}`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                newClassInput.value = '';
+                await loadProjectClasses(currentClassesProject);
+            } else {
+                alert('添加失败: ' + result.error);
+            }
+        } catch (error) {
+            alert('添加失败: ' + error.message);
+        }
+    });
+
+    // 回车键添加类别
+    newClassInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addClassBtn.click();
+        }
+    });
+
+    // ==================== 用户管理功能 ====================
+
+    window.openUserManagement = function () {
+        document.getElementById('users-modal').classList.add('active');
+        loadUsers();
+    };
+
+    document.querySelector('.users-close-btn')?.addEventListener('click', () => {
+        document.getElementById('users-modal').classList.remove('active');
+    });
+
+    async function loadUsers() {
+        const tbody = document.getElementById('users-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">正在加载用户...</td></tr>';
+
+        try {
+            const response = await fetch('/get_all_users');
+            const result = await response.json();
+
+            if (result.success) {
+                renderUsers(result.users);
+            } else {
+                tbody.innerHTML = `<tr><td colspan="6" class="error">加载失败: ${result.error}</td></tr>`;
+            }
+        } catch (error) {
+            tbody.innerHTML = `<tr><td colspan="6" class="error">加载失败: ${error.message}</td></tr>`;
+        }
+    }
+
+    function renderUsers(users) {
+        const tbody = document.getElementById('users-table-body');
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="no-data">暂无用户</td></tr>';
+            return;
+        }
+
+        const currentUserId = "{{ current_user.id }}";
+
+        tbody.innerHTML = users.map(user => `
+            <tr>
+                <td>${user.username}</td>
+                <td>${user.last_name}${user.first_name}</td>
+                <td>${user.email}</td>
+                <td>
+                    ${user.id === currentUserId ?
+                `<span class="badge ${user.role === 'admin' ? 'badge-admin' : 'badge-annotator'}">${user.role}</span>` :
+                `<select onchange="updateUserRole(${user.id}, this.value)" class="role-select">
+                            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+                            <option value="annotator" ${user.role === 'annotator' ? 'selected' : ''}>Annotator</option>
+                        </select>`
+            }
+                </td>
+                <td>
+                    ${user.id === currentUserId ?
+                '<span class="status-active">Active</span>' :
+                `<button class="status-btn ${user.is_active ? 'active' : 'inactive'}" 
+                                 onclick="toggleUserActive(${user.id})">
+                            ${user.is_active ? 'Enabled' : 'Disabled'}
+                        </button>`
+            }
+                </td>
+                <td>
+                    ${user.id !== currentUserId ?
+                `<button class="delete-btn-icon" onclick="deleteUser(${user.id}, '${user.username}')" title="删除用户">
+                            <i class="fas fa-trash"></i>
+                        </button>` : ''
+            }
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    window.updateUserRole = async function (userId, newRole) {
+        try {
+            const formData = new FormData();
+            formData.append('user_id', userId);
+            formData.append('role', newRole);
+
+            const response = await fetch('/update_user_role', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert('角色已更新');
+            } else {
+                alert('更新失败: ' + result.error);
+                loadUsers();
+            }
+        } catch (error) {
+            alert('更新失败: ' + error.message);
+            loadUsers();
+        }
+    };
+
+    window.toggleUserActive = async function (userId) {
+        try {
+            const formData = new FormData();
+            formData.append('user_id', userId);
+
+            const response = await fetch('/toggle_user_active', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                loadUsers();
+            } else {
+                alert('操作失败: ' + result.error);
+            }
+        } catch (error) {
+            alert('操作失败: ' + error.message);
+        }
+    };
+
+    window.deleteUser = async function (userId, username) {
+        if (!confirm(`确定要删除用户 "${username}" 吗？此操作不可撤销，且会删除该用户的所有任务分配记录。`)) {
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('user_id', userId);
+
+            const response = await fetch('/delete_user', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert('用户已删除');
+                loadUsers();
+            } else {
+                alert('删除失败: ' + result.error);
+            }
+        } catch (error) {
+            alert('删除失败: ' + error.message);
+        }
+    };
+
+    // ==================== 任务分配功能 ====================
+
+    let currentAssignProject = '';
+    let allImages = [];
+    let annotators = [];
+    let selectedImages = new Set();
+    let selectedAnnotators = new Set();
+    let currentAssignIsCT = false;
+
+    function updateAssignLabels() {
+        const titleEl = document.querySelector('#assign-modal .assign-images-section h3');
+        const filterEl = document.getElementById('image-filter');
+        const countEl = document.getElementById('image-count');
+        const totalLabel = document.querySelector('label[for=\"image-filter\"]');
+        const manualBtn = document.getElementById('manual-assign-btn');
+
+        if (titleEl) titleEl.textContent = currentAssignIsCT ? 'CT 列表' : '图片列表';
+        if (totalLabel) totalLabel.textContent = currentAssignIsCT ? '筛选 CT 任务' : '筛选图片';
+        if (filterEl) {
+            filterEl.options[0].text = currentAssignIsCT ? '全部 CT' : '全部图片';
+        }
+        if (countEl && !countEl.textContent) {
+            countEl.textContent = currentAssignIsCT ? '0 个CT任务' : '0 张图片';
+        }
+        if (manualBtn) {
+            manualBtn.innerHTML = currentAssignIsCT
+                ? '<i class=\"fas fa-user-check\"></i> 分配选中 CT'
+                : '<i class=\"fas fa-user-check\"></i> 分配选中图片';
+        }
+        const statLabels = document.querySelectorAll('.assign-stats .stat-label');
+        if (statLabels.length >= 1) statLabels[0].textContent = currentAssignIsCT ? '总 CT' : '总图片';
+    }
+
+    // 打开任务分配弹窗
+    window.openAssignModal = function (projectName) {
+        console.log('Opening assign modal for:', projectName);
+        currentAssignProject = projectName;
+        document.getElementById('assign-project-name').textContent = currentAssignProject;
+        document.getElementById('assign-modal').classList.add('active');
+        loadAssignData();
+    };
+
+    // 关闭任务分配弹窗
+    document.querySelector('.assign-close-btn')?.addEventListener('click', () => {
+        document.getElementById('assign-modal').classList.remove('active');
+    });
+
+    // 加载分配数据
+    async function loadAssignData() {
+        await loadProjectImages();
+        await Promise.all([loadAnnotators(), loadProjectProgress()]);
+    }
+
+    // 加载项目图片
+    async function loadProjectImages() {
+        const container = document.getElementById('assign-images-list');
+        container.innerHTML = `<div class="loading">正在加载${currentAssignIsCT ? 'CT' : '图片'}...</div>`;
+
+        try {
+            const response = await fetch(`/get_project_images/${encodeURIComponent(currentAssignProject)}`);
+            const result = await response.json();
+
+            if (result.success) {
+                allImages = result.images;
+                currentAssignIsCT = !!result.is_ct;
+                updateAssignLabels();
+                renderImages();
+            } else {
+                container.innerHTML = '<div class="no-annotators">加载失败</div>';
+            }
+        } catch (error) {
+            container.innerHTML = '<div class="no-annotators">加载失败: ' + error.message + '</div>';
+        }
+    }
+
+    // 渲染图片列表
+    function renderImages() {
+        const container = document.getElementById('assign-images-list');
+        const filter = document.getElementById('image-filter').value;
+
+        let filteredImages = allImages;
+        if (filter === 'assigned') {
+            filteredImages = allImages.filter(img => img.assigned_to);
+        } else if (filter === 'unassigned') {
+            filteredImages = allImages.filter(img => !img.assigned_to);
+        }
+
+        document.getElementById('image-count').textContent = currentAssignIsCT
+            ? `${filteredImages.length} 个CT任务`
+            : `${filteredImages.length} 张图片`;
+
+        if (filteredImages.length === 0) {
+            container.innerHTML = `<div class="no-annotators">没有${currentAssignIsCT ? 'CT任务' : '图片'}</div>`;
+            return;
+        }
+
+        container.innerHTML = filteredImages.map(img => `
+            <div class="image-item ${selectedImages.has(img.name) ? 'selected' : ''} ${img.assigned_to ? 'assigned' : ''}"
+                 data-name="${img.name}" onclick="toggleImageSelect('${img.name}')">
+                ${img.path ? `<img src="${img.path}" alt="${img.name}" loading="lazy">` : `<div class="project-media-placeholder" style="height:120px;border-radius:8px;">${img.is_ct ? 'CT' : '预览'}</div>`}
+                <div class="image-name">${img.name}</div>
+                ${img.is_ct ? `<div class="image-name" style="font-size:12px;color:#888;">${img.slice_count || 0} 层切片</div>` : ''}
+                ${img.assigned_to ? `<div class="assigned-badge">${img.assigned_to.split(' ')[0]}</div>` : ''}
+            </div>
+        `).join('');
+    }
+
+    // 切换图片选择
+    window.toggleImageSelect = function (imageName) {
+        if (selectedImages.has(imageName)) {
+            selectedImages.delete(imageName);
+        } else {
+            selectedImages.add(imageName);
+        }
+        renderImages();
+    };
+
+    // 全选图片
+    window.selectAllImages = function () {
+        const filter = document.getElementById('image-filter').value;
+        let filteredImages = allImages;
+        if (filter === 'assigned') {
+            filteredImages = allImages.filter(img => img.assigned_to);
+        } else if (filter === 'unassigned') {
+            filteredImages = allImages.filter(img => !img.assigned_to);
+        }
+        filteredImages.forEach(img => selectedImages.add(img.name));
+        renderImages();
+    };
+
+    // 取消全选
+    window.deselectAllImages = function () {
+        selectedImages.clear();
+        renderImages();
+    };
+
+    // 过滤器变化
+    document.getElementById('image-filter')?.addEventListener('change', renderImages);
+
+    // 加载标注员列表
+    async function loadAnnotators() {
+        const container = document.getElementById('annotators-list');
+        container.innerHTML = '<div class="loading">正在加载标注员...</div>';
+
+        try {
+            // Pass project_name to get stats
+            const response = await fetch(`/get_annotators?project_name=${currentAssignProject || ''}`);
+            const result = await response.json();
+
+            if (result.success) {
+                annotators = result.annotators;
+                renderAnnotators();
+            } else {
+                container.innerHTML = '<div class="no-annotators">加载失败</div>';
+            }
+        } catch (error) {
+            container.innerHTML = '<div class="no-annotators">加载失败</div>';
+        }
+    }
+
+    // 渲染标注员选择列表
+    function renderAnnotators() {
+        const container = document.getElementById('annotator-list');
+        if (!container) return;
+
+        // --- Added Reset History Checkbox ---
+        let checkboxHtml = `
+            <div style="margin: 15px 0; padding: 10px; background: #fff3e0; border-radius: 4px; border: 1px solid #ffe0b2;">
+                 <label style="display: flex; align-items: center; cursor: pointer; color: #e65100;">
+                    <input type="checkbox" id="reset-history-checkbox" style="margin-right: 8px;">
+                    <span style="font-weight: 500;">
+                        重新分配时重置进度
+                    </span>
+                 </label>
+                 <div style="font-size: 0.85em; color: #bf360c; margin-top: 4px; margin-left: 24px;">
+                    勾选后，系统将清除选中标注员在此项目中"已完成"的历史记录，让他们从 0 开始计数（不会删除实际的标注数据）。
+                 </div>
+            </div>
+        `;
+
+        // Handle existing or new content
+        const existingCheckbox = document.getElementById('reset-history-wrapper');
+        if (!existingCheckbox) {
+            // We can't easily prepend to innerHTML without redrawing list.
+            // Ideally this should be in the static HTML structure, but user asked for dynamic addition.
+            // Actually, let's insert it BEFORE the list if it's not there.
+            // BUT `renderAnnotators` is called after fetch.
+            // Let's modify the modal HTML structure directly.
+        }
+
+        container.innerHTML = annotators.map(a => `
+            <div class="user-select-item" onclick="toggleAnnotatorSelection(${a.id}, this)">
+                <i class="fas fa-check-circle check-icon"></i>
+                <div class="user-avatar">${a.first_name[0]}${a.last_name[0]}</div>
+                <div class="user-info">
+                    <div class="user-name">${a.first_name} ${a.last_name}</div>
+                    <div class="user-email">${a.email}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // 渲染标注员统计数据
+    function renderAnnotatorStats() {
+        const container = document.getElementById('annotator-stats-list');
+        const wrapper = document.getElementById('annotator-stats-container');
+
+        if (!container || !wrapper) return;
+
+        // If no stats available or total is 0 for all, hide container
+        if (!annotators.some(a => a.stats && a.stats.total > 0)) {
+            wrapper.style.display = 'none';
+            return;
+        }
+
+        wrapper.style.display = 'block';
+        container.innerHTML = annotators.map(a => {
+            if (!a.stats || a.stats.total === 0) return '';
+
+            const percent = Math.round((a.stats.completed / a.stats.total) * 100);
+            return `
+                <div class="stat-item-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 0.9em;">
+                    <div style="width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${a.first_name} ${a.last_name}">
+                        ${a.first_name} ${a.last_name}
+                    </div>
+                    <div style="flex: 1; margin: 0 10px;">
+                        <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
+                            <div style="background: #4CAF50; width: ${percent}%; height: 100%;"></div>
+                        </div>
+                    </div>
+                    <div style="width: 100px; text-align: right; color: #666; font-size: 12px;">
+                        ${a.stats.completed}/${a.stats.total} (${percent}%)
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // 渲染标注员列表
+    function renderAnnotators() {
+        const container = document.getElementById('annotators-list');
+
+        if (annotators.length === 0) {
+            container.innerHTML = '<div class="no-annotators">暂无标注员，请先让标注员注册账号</div>';
+            return;
+        }
+
+        container.innerHTML = annotators.map(a => `
+            <div class="annotator-item ${selectedAnnotators.has(a.id) ? 'selected' : ''}" 
+                 onclick="selectAnnotator(${a.id})">
+                <input type="checkbox" name="annotator" ${selectedAnnotators.has(a.id) ? 'checked' : ''}>
+                <div class="annotator-info">
+                    <div class="annotator-name">${a.first_name} ${a.last_name}</div>
+                    <div class="annotator-email">${a.email}</div>
+                </div>
+            </div>
+        `).join('');
+
+        // Also render stats
+        renderAnnotatorStats();
+    }
+
+    // 选择标注员
+    window.selectAnnotator = function (id) {
+        if (selectedAnnotators.has(id)) {
+            selectedAnnotators.delete(id);
+        } else {
+            selectedAnnotators.add(id);
+        }
+        renderAnnotators();
+    };
+
+    // 加载进度统计
+    async function loadProjectProgress() {
+        try {
+            const response = await fetch(`/get_project_progress/${encodeURIComponent(currentAssignProject)}`);
+            const result = await response.json();
+
+            if (result.success) {
+                const p = result.progress;
+                // 使用后端计算的统计数据
+                // total_images: 项目总图片数
+                // completed_images: 已完成标注的图片数
+                // assigned_count: 已分配给标注员的图片数
+                // unassigned_count: 未分配的图片数 = 总图片 - 已完成 - 已分配
+                document.getElementById('stat-total').textContent = p.total_images;
+                document.getElementById('stat-assigned').textContent = p.assigned_count;
+                document.getElementById('stat-unassigned').textContent = p.unassigned_count;
+                document.getElementById('stat-completed').textContent = p.completed_images;
+                currentAssignIsCT = !!p.is_ct;
+                updateAssignLabels();
+            }
+        } catch (error) {
+            console.error('Error loading progress:', error);
+        }
+    }
+
+    // 手动分配
+    window.manualAssign = async function () {
+        if (selectedImages.size === 0) {
+            alert(currentAssignIsCT ? '请先选择要分配的 CT 任务' : '请先选择要分配的图片');
+            return;
+        }
+        if (selectedAnnotators.size === 0) {
+                alert('请先选择标注员');
+                return;
+            }
+
+        const resetHistory = document.getElementById('reset-history-checkbox')?.checked || false;
+
+        const formData = new FormData();
+        formData.append('project_name', currentAssignProject);
+        selectedAnnotators.forEach(id => formData.append('annotator_ids[]', id));
+        selectedImages.forEach(img => formData.append('image_names[]', img));
+        formData.append('reset_history', resetHistory);
+
+        try {
+            const response = await fetch('/assign_images', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert(result.message);
+                selectedImages.clear();
+                await loadAssignData();
+            } else {
+                alert('分配失败: ' + result.error);
+            }
+        } catch (error) {
+            alert('分配失败: ' + error.message);
+        }
+    };
+
+    // 自动分配
+    window.autoAssign = async function () {
+        // Use selected annotators if any, otherwise warn user
+        const targetAnnotators = selectedAnnotators.size > 0
+            ? annotators.filter(a => selectedAnnotators.has(a.id))
+            : annotators;
+
+        if (selectedAnnotators.size === 0) {
+            if (!confirm('您未选中任何标注员，是否要自动分配给【所有】标注员？')) {
+                return;
+            }
+        }
+
+        if (targetAnnotators.length === 0) {
+            alert('没有可用的标注员');
+            return;
+        }
+
+        // Calculate actual uncompleted images
+        const uncompletedCount = allImages.filter(img => !img.is_completed).length;
+
+        if (uncompletedCount === 0) {
+            alert(currentAssignIsCT ? '所有 CT 任务都已完成标注，无需重新分配' : '所有图片都已完成标注，无需重新分配');
+            return;
+        }
+
+        const itemWord = currentAssignIsCT ? '个未完成的 CT 任务' : '张未标注的图片';
+        const completedWord = currentAssignIsCT ? '个已完成的 CT 任务' : '张已完成的图片';
+        if (!confirm(`确定要将 ${uncompletedCount} ${itemWord}自动平均分配给选中的 ${targetAnnotators.length} 个标注员吗？\n(已保留 ${allImages.length - uncompletedCount} ${completedWord})`)) {
+            return;
+        }
+
+        const resetHistory = document.getElementById('reset-history-checkbox')?.checked || false;
+
+        const formData = new FormData();
+        formData.append('project_name', currentAssignProject);
+        targetAnnotators.forEach(a => formData.append('annotator_ids[]', a.id));
+        formData.append('reset_history', resetHistory);
+
+        try {
+            const response = await fetch('/auto_assign_images', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert(result.message);
+                await loadAssignData();
+            } else {
+                alert('分配失败: ' + result.error);
+            }
+        } catch (error) {
+            alert('分配失败: ' + error.message);
+        }
+    };
+
+</script>
+
+{% endblock %}
