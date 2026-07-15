@@ -166,7 +166,7 @@
 </style>
 <div class="dashboard">
     <div class="header">
-        <h2>🫁 医学分割项目</h2>
+        <h2><img src="{{ url_for('static', filename='img/medical_cross.png') }}" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px;">医学分割项目</h2>
         {% if current_user.role == 'admin' %}
         <button class="create-btn">
             <i class="fa-solid fa-folder-plus"></i> 创建 CT 项目
@@ -228,7 +228,7 @@
                 <span class="project-name">{{ project.name }}</span>
                 {% if project.progress and project.progress.is_ct %}
                 <div class="progress-bar-mini" style="background:transparent;border:none">
-                    <span class="progress-text" style="color:#3b82f6">🫁 {{ project.progress.total }} 个CT扫描</span>
+                    <span class="progress-text" style="color:#3b82f6">{{ project.progress.total }} 个CT扫描</span>
                 </div>
                 {% elif project.progress and project.progress.total > 0 %}
                 <div class="progress-bar-mini">
